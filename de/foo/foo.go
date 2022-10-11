@@ -5,3 +5,7 @@ type Thing struct {
 	// A pulse to this pin will step the motor
 	Name string
 }
+
+func Hi() string {
+	return "hi"
+}
