@@ -4,7 +4,7 @@ import (
     "fmt"
 
     "golang.org/x/example/stringutil"
-		"github.com/tonygilkerson/astroeq/de"
+		// "github.com/tonygilkerson/astroeq/de/foo"
 )
 
 func main() {
