@@ -8,5 +8,10 @@ type Thing struct {
 
 // Hi says hi
 func Hi() string {
-	return "hi"
+	return "hi delta"
+}
+
+// HiHO says hi
+func HiHo() string {
+	return "HiHo"
 }
