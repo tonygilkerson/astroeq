@@ -13,4 +13,6 @@ func main() {
 	fmt.Println(stringutil.Reverse("I am DE"))
 	var t foo.Thing
 	fmt.Printf("%T\n",t)
+	fmt.Println(foo.HiHo())
+	fmt.Println(foo.HiHoa())
 }
