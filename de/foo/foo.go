@@ -6,6 +6,7 @@ type Thing struct {
 	Name string
 }
 
+// Hi says hi
 func Hi() string {
 	return "hi"
 }
