@@ -2,14 +2,16 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"machine"
 	"time"
-	"image/color"
+
 	"github.com/tonygilkerson/astroeq/pkg/hid"
+	"github.com/tonygilkerson/astroeq/pkg/msg"
 
 	"tinygo.org/x/drivers/ssd1351"
 	"tinygo.org/x/tinyfont"
-	"tinygo.org/x/tinyfont/freemono"	
+	"tinygo.org/x/tinyfont/freemono"
 )
 
 func main() {
@@ -17,9 +19,44 @@ func main() {
 	// run light
 	runLight()
 
+	/////////////////////////////////////////////////////////////////////////////
+	// Broker
+	/////////////////////////////////////////////////////////////////////////////
+	
+	mb, _ := msg.NewBroker(
+		machine.UART0,
+		machine.UART0_TX_PIN,
+		machine.UART0_RX_PIN,
+		// The Handset is at the head of the conga line so no UART1 needed
+		nil,
+		machine.NoPin,
+		machine.NoPin,
+	)
+	mb.Configure()
+
 	//
-	// SPI for Display
+	// Create subscription channels
 	//
+	fooCh := make(chan msg.FooMsg)
+
+	//
+	// Register the channels with the broker
+	//
+	mb.SetFooCh(fooCh)
+
+	//
+	// Start the message consumers
+	//
+	go fooConsumer(fooCh, mb)
+
+	//
+	// Start the subscription reader, it will read from the the UARTS
+	//
+	mb.SubscriptionReader()
+
+	/////////////////////////////////////////////////////////////////////////////
+	// Display
+	/////////////////////////////////////////////////////////////////////////////
 	machine.SPI0.Configure(machine.SPIConfig{
 		Frequency: 2000000,
 		LSBFirst:  false,
@@ -52,26 +89,24 @@ func main() {
 	display.FillScreen(color.RGBA{0, 0, 0, 0})
 	red := color.RGBA{0, 0, 255, 255}
 
-
 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 15, "ESC = clr", red)
-	display.FillRectangle(3,20,125,1,red)
+	display.FillRectangle(3, 20, 125, 1, red)
 
 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 40, "Test 0001", red)
-	display.FillRectangle(3,45,124,1,red)
+	display.FillRectangle(3, 45, 124, 1, red)
 
 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 65, "Test 0002", red)
-	display.FillRectangle(3,70,123,1,red)
+	display.FillRectangle(3, 70, 123, 1, red)
 
 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 90, "Test 0003", red)
-	display.FillRectangle(3,70,123,1,red)
-	
+	display.FillRectangle(3, 70, 123, 1, red)
+
 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 115, "Test 0004", red)
-	display.FillRectangle(3,70,123,1,red)
+	display.FillRectangle(3, 70, 123, 1, red)
 
-
-	//
+	/////////////////////////////////////////////////////////////////////////////
 	// keypad keys
-	//
+	/////////////////////////////////////////////////////////////////////////////
 	zeroKey := machine.GP3
 	oneKey := machine.GP11
 	twoKey := machine.GP12
@@ -121,12 +156,21 @@ func main() {
 	//
 	// Capture key strokes
 	//
-	
+
 	dsp := ""
 
 	for k := range keyStrokes {
 		keyName := handset.GetKeyName(k)
 		fmt.Printf("[main] KeyName: %s\n", keyName)
+
+		// Publish key
+		var logMsg msg.LogMsg
+		logMsg.Kind = msg.Log
+		logMsg.Level = msg.Info
+		logMsg.Source = "cmd>handset>main.go>main"
+		logMsg.Body = fmt.Sprintf("Key press [%s]",keyName)
+		msg.PublishMsg(logMsg,mb)
+
 		
 		switch k {
 		case hid.EscKey:
@@ -157,4 +201,11 @@ func runLight() {
 		time.Sleep(time.Millisecond * 100)
 	}
 	led.High()
+}
+
+func fooConsumer(c chan msg.FooMsg, mb msg.MsgBroker) {
+
+	for m := range c {
+		fmt.Printf("[handset.fooConsumer] - Kind: [%s], name: [%s]\n", m.Kind, m.Name)
+	}
 }
