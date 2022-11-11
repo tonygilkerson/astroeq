@@ -22,16 +22,29 @@ func main() {
 	/////////////////////////////////////////////////////////////////////////////
 	// Broker
 	/////////////////////////////////////////////////////////////////////////////
-	
-	mb, _ := msg.NewBroker(
+
+	fmt.Println("Create new broker")
+	var noUART *machine.UART
+
+	mb, err := msg.NewBroker(
 		machine.UART0,
 		machine.UART0_TX_PIN,
 		machine.UART0_RX_PIN,
 		// The Handset is at the head of the conga line so no UART1 needed
-		nil,
+		noUART,
 		machine.NoPin,
 		machine.NoPin,
 	)
+
+	if err != nil {
+		fmt.Println("broker create")
+	} else {
+		fmt.Println(err)
+
+	}
+	fmt.Println("config broker")
+
+	
 	mb.Configure()
 
 	//
@@ -167,11 +180,10 @@ func main() {
 		var logMsg msg.LogMsg
 		logMsg.Kind = msg.Log
 		logMsg.Level = msg.Info
-		logMsg.Source = "cmd>handset>main.go>main"
-		logMsg.Body = fmt.Sprintf("Key press [%s]",keyName)
-		msg.PublishMsg(logMsg,mb)
+		logMsg.Source = "handset"
+		logMsg.Body = fmt.Sprintf("Key press [%s]", keyName)
+		msg.PublishMsg(logMsg, mb)
 
-		
 		switch k {
 		case hid.EscKey:
 			display.FillScreen(color.RGBA{0, 0, 0, 0}) // Clear screen
@@ -194,7 +206,7 @@ func runLight() {
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	// blink run light for a bit seconds so I can tell it is starting
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		led.High()
 		time.Sleep(time.Millisecond * 100)
 		led.Low()
