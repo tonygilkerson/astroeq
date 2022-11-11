@@ -16,18 +16,15 @@ import (
 
 func main() {
 
-	
-
 	// run light
 	runLight()
 
-	
 	/////////////////////////////////////////////////////////////////////////////
 	// Console Display
 	/////////////////////////////////////////////////////////////////////////////
 
 	machine.SPI1.Configure(machine.SPIConfig{
-		Frequency: 8000000,
+		Frequency: 8_000_000,
 		LSBFirst:  false,
 		Mode:      0,
 		DataBits:  0,
@@ -38,8 +35,8 @@ func main() {
 
 	display := st7789.New(machine.SPI1,
 		machine.GP12, // TFT_RESET
-		machine.GP8, // TFT_DC
-		machine.GP9, // TFT_CS
+		machine.GP8,  // TFT_DC
+		machine.GP9,  // TFT_CS
 		machine.GP13) // TFT_LITE
 
 	display.Configure(st7789.Config{
@@ -53,14 +50,13 @@ func main() {
 		FrameRate:    st7789.FRAMERATE_111,
 		VSyncLines:   st7789.MAX_VSYNC_SCANLINES,
 	})
-	
-	consoleCh := make(chan string)
 
+	consoleCh := make(chan string)
 
 	/////////////////////////////////////////////////////////////////////////////
 	// Broker
 	/////////////////////////////////////////////////////////////////////////////
-	
+
 	mb, _ := msg.NewBroker(
 		machine.UART0,
 		machine.UART0_TX_PIN,
@@ -75,32 +71,31 @@ func main() {
 	// Create subscription channels
 	//
 	fooCh := make(chan msg.FooMsg)
-	
+	logCh := make(chan msg.LogMsg)
 
 	//
 	// Register the channels with the broker
 	//
 	mb.SetFooCh(fooCh)
-
+	mb.SetLogCh(logCh)
 
 	//
 	// Start the message consumers
 	//
 	go fooConsumer(fooCh, mb, consoleCh)
+	go logConsumer(logCh, mb, consoleCh)
 
 	//
 	// Start the subscription reader, it will read from the the UARTS
 	//
 	go mb.SubscriptionReader()
 
-
 	/////////////////////////////////////////////////////////////////////////////
 	// writeConsole
 	/////////////////////////////////////////////////////////////////////////////
-	
-	writeConsole(display,consoleCh)
-}
 
+	writeConsole(display, consoleCh)
+}
 
 func runLight() {
 
@@ -109,7 +104,7 @@ func runLight() {
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	// blink run light for a bit seconds so I can tell it is starting
-	for i := 0; i < 15; i++ {
+	for i := 0; i < 5; i++ {
 		led.High()
 		time.Sleep(time.Millisecond * 100)
 		led.Low()
@@ -119,23 +114,21 @@ func runLight() {
 }
 
 func paintScreen(c color.RGBA, d *st7789.Device, s int16) {
-	var x,y int16
-	for y = 0; y < 240; y=y+s {
-		for x = 0; x < 320; x=x+s {
+	var x, y int16
+	for y = 0; y < 240; y = y + s {
+		for x = 0; x < 320; x = x + s {
 			d.FillRectangle(x, y, s, s, c)
 		}
 	}
 }
 
-func cls (d *st7789.Device){
+func cls(d *st7789.Device) {
+	// green := color.RGBA{0, 255, 0, 255}
 	black := color.RGBA{0, 0, 0, 255}
 	d.FillScreen(black)
-	fmt.Printf("FillScreen(black)\n")
 }
 
-//
 // Read from fooCh and write to consoleCh
-//
 func fooConsumer(fooCh chan msg.FooMsg, mb msg.MsgBroker, consoleCh chan string) {
 
 	for msg := range fooCh {
@@ -144,27 +137,70 @@ func fooConsumer(fooCh chan msg.FooMsg, mb msg.MsgBroker, consoleCh chan string)
 	}
 }
 
+// Read from logCh and write to consoleCh
+func logConsumer(logCh chan msg.LogMsg, mb msg.MsgBroker, consoleCh chan string) {
+
+	for msg := range logCh {
+		s := fmt.Sprintf("%s: %s %s %s", msg.Kind, msg.Level, msg.Source, msg.Body)
+		consoleCh <- s
+	}
+}
+
 func writeConsole(display st7789.Device, ch chan string) {
 
 	width, height := display.Size()
-	fmt.Printf("width: %v, height: %v\n",width, height)
+	fmt.Printf("width: %v, height: %v\n", width, height)
 
-	red := color.RGBA{126, 0, 0, 255}
-	// red := color.RGBA{255, 0, 0, 255}
-	// black := color.RGBA{0, 0, 0, 255}
+	//red := color.RGBA{126, 0, 0, 255}
+	red := color.RGBA{255, 0, 0, 255}
+	black := color.RGBA{0, 0, 0, 255}
 	// white := color.RGBA{255, 255, 255, 255}
 	// blue := color.RGBA{0, 0, 255, 255}
-	// green := color.RGBA{0, 255, 0, 255}
+	green := color.RGBA{0, 255, 0, 255}
 
 	cls(&display)
-	tinyfont.WriteLine(&display,&freemono.Regular12pt7b,10,20,"Ready...",red)
+	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 20, "123456789-123456789-x", red)
+	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 40, "Ready...2", red)
+	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 60, "Ready...3", red)
+	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 80, "Ready...4", red)
+	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 100, "Ready...5", red)
+	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 120, "Ready...6", red)
+	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 140, "Ready...7", red)
+	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 160, "Ready...8", red)
+	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 180, "Ready...9", red)
+	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 200, "Ready...10", red)
+	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 220, "Ready...11", red)
+
+	var l int16 = 1
+	var first bool = true
+	var toggle bool = true
+	var vline int16 = 0
 
 	for msg := range ch {
+		if first {
+			cls(&display)
+			first = false
+		}
 		
-		cls(&display)
-		// tinyfont.WriteLine(&display,&freemono.Regular12pt7b,10,20,"123456789-123456789-x",red)
-		tinyfont.WriteLine(&display,&freemono.Regular12pt7b,10,20,msg,red)
-		
+		if l > 9 {
+			display.DrawFastHLine(0, 300, vline+5, black) // erase the last line
+			l = 1
+		}
+
+		vline = int16(l * 25)
+		if toggle {
+			toggle = false
+			display.FillRectangle(0, vline-20, 320, 25, black)
+		} else {
+			toggle = true
+			display.FillRectangle(0, vline-20, 320, 25, black)
+		}
+
+		tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, vline, msg, red)
+		fmt.Println("vline: ", vline)
+		display.DrawFastHLine(0, 300, vline+5, green)
+
+		l++
 	}
 
 }
