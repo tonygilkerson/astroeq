@@ -14,7 +14,6 @@ type LogLevel string
 
 const (
 	Foo MsgType = "Foo"
-	Bar         = "Bar"
 	Log         = "Log"
 )
 
@@ -25,7 +24,7 @@ const (
 	Error          = "Error"
 )
 
-// DEVTODO delete foo and bar messages eventually they are just examples to show how this works
+// DEVTODO delete foo message eventually
 type LogMsg struct {
 	Kind   MsgType
 	Level  LogLevel
@@ -36,15 +35,9 @@ type FooMsg struct {
 	Kind MsgType
 	Name string
 }
-type BarMsg struct {
-	Kind MsgType
-	Aaa  string
-	Bbb  string
-	Ccc  string
-}
 
 type MsgInterface interface {
-	FooMsg | BarMsg | LogMsg
+	FooMsg | LogMsg
 }
 
 // Message Broker
@@ -58,7 +51,7 @@ type MsgBroker struct {
 	uartDnRxPin machine.Pin
 
 	fooCh chan FooMsg
-	barCh chan BarMsg
+	logCh chan LogMsg
 }
 
 func NewBroker(
@@ -81,6 +74,7 @@ func NewBroker(
 		uartDnRxPin: uartDnRxPin,
 
 		fooCh: nil,
+		logCh: nil,
 	}, nil
 
 }
@@ -96,10 +90,14 @@ func (mb *MsgBroker) Configure() {
 func (mb *MsgBroker) SetFooCh(c chan FooMsg) {
 	mb.fooCh = c
 }
-func (mb *MsgBroker) SetBarCh(c chan BarMsg) {
-	mb.barCh = c
+func (mb *MsgBroker) SetLogCh(c chan LogMsg) {
+	mb.logCh = c
 }
 
+//
+// Look for messages that look like this
+//  ^Log|Info|HID|A log message from the HID~
+//
 func (mb *MsgBroker) SubscriptionReader() {
 
 	//
@@ -160,11 +158,11 @@ func (mb *MsgBroker) DispatchMessage(msgParts []string) {
 		if mb.fooCh != nil {
 			mb.fooCh <- *msg
 		}
-	case Bar:
-		fmt.Println("[DispatchMessage] - Bar")
-		msg := unmarshallBar(msgParts)
-		if mb.barCh != nil {
-			mb.barCh <- *msg
+	case Log:
+		fmt.Println("[DispatchMessage] - Log")
+		msg := unmarshallLog(msgParts)
+		if mb.logCh != nil {
+			mb.logCh <- *msg
 		}
 	default:
 		fmt.Println("[DispatchMessage] - default")
@@ -214,21 +212,21 @@ func unmarshallFoo(msgParts []string) *FooMsg {
 	return msg
 }
 
-func unmarshallBar(msgParts []string) *BarMsg {
+func unmarshallLog(msgParts []string) *LogMsg {
 
-	msg := new(BarMsg)
+	msg := new(LogMsg)
 
 	if len(msgParts) > 0 {
-		msg.Kind = Bar
+		msg.Kind = Log
 	}
 	if len(msgParts) > 1 {
-		msg.Aaa = msgParts[1]
+		msg.Level = LogLevel(msgParts[1])
 	}
 	if len(msgParts) > 2 {
-		msg.Bbb = msgParts[2]
+		msg.Source = msgParts[2]
 	}
 	if len(msgParts) > 3 {
-		msg.Ccc = msgParts[3]
+		msg.Body = msgParts[3]
 	}
 
 	return msg
