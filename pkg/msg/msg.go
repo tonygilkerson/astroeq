@@ -18,9 +18,9 @@ const (
 )
 
 const (
-	Info  LogLevel = "Info"
+	Debug LogLevel = "Debug"
+	Info           = "Info"
 	Warn           = "Warn"
-	Debug          = "Debug"
 	Error          = "Error"
 )
 
@@ -42,6 +42,8 @@ type MsgInterface interface {
 
 // Message Broker
 type MsgBroker struct {
+	logLevel    LogLevel
+
 	uartUp      *machine.UART
 	uartUpTxPin machine.Pin
 	uartUpRxPin machine.Pin
@@ -94,10 +96,9 @@ func (mb *MsgBroker) SetLogCh(c chan LogMsg) {
 	mb.logCh = c
 }
 
-//
 // Look for messages that look like this
-//  ^Log|Info|HID|A log message from the HID~
 //
+//	^Log|Info|HID|A log message from the HID~
 func (mb *MsgBroker) SubscriptionReader() {
 
 	//

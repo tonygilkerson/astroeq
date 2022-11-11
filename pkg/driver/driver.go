@@ -85,7 +85,7 @@ type RADriver struct {
 	gearRatio int32
 
 	// RA Encoder
-	encoder astroenc.RAEncoder
+	encoder encoder.RAEncoder
 
 	// RA Encoder
 	position uint32
@@ -126,7 +126,7 @@ func NewRADriver(
 		return RADriver{}, errors.New("gearRatio must be greater than 0, use 1 if not using a gearbox, typical values between 1 and 75")
 	}
 
-	encoder := astroenc.NewRA(encoderSPI, encoderCS, astroenc.RES14)
+	encoder := encoder.NewRA(encoderSPI, encoderCS, encoder.RES14)
 
 	return RADriver{
 		stepPin:             stepPin,
