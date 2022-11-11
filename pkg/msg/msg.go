@@ -14,14 +14,14 @@ type LogLevel string
 
 const (
 	Foo MsgType = "Foo"
-	Log         = "Log"
+	Log MsgType = "Log"
 )
 
 const (
 	Debug LogLevel = "Debug"
-	Info           = "Info"
-	Warn           = "Warn"
-	Error          = "Error"
+	Info  LogLevel = "Info"
+	Warn  LogLevel = "Warn"
+	Error LogLevel = "Error"
 )
 
 // DEVTODO delete foo message eventually
@@ -42,7 +42,7 @@ type MsgInterface interface {
 
 // Message Broker
 type MsgBroker struct {
-	logLevel    LogLevel
+	logLevel LogLevel
 
 	uartUp      *machine.UART
 	uartUpTxPin machine.Pin
@@ -57,6 +57,7 @@ type MsgBroker struct {
 }
 
 func NewBroker(
+
 	uartUp *machine.UART,
 	uartUpTxPin machine.Pin,
 	uartUpRxPin machine.Pin,
@@ -67,6 +68,8 @@ func NewBroker(
 ) (MsgBroker, error) {
 
 	return MsgBroker{
+		logLevel: Warn, // By default broker Warn and Error
+
 		uartUp:      uartUp,
 		uartUpTxPin: uartUpTxPin,
 		uartUpRxPin: uartUpRxPin,
@@ -159,7 +162,7 @@ func (mb *MsgBroker) DispatchMessage(msgParts []string) {
 		if mb.fooCh != nil {
 			mb.fooCh <- *msg
 		}
-	case Log:
+	case string(Log):
 		fmt.Println("[DispatchMessage] - Log")
 		msg := unmarshallLog(msgParts)
 		if mb.logCh != nil {
@@ -171,12 +174,57 @@ func (mb *MsgBroker) DispatchMessage(msgParts []string) {
 
 }
 
+func (mb *MsgBroker) SetLogLevel(level LogLevel) {
+	mb.logLevel = level
+}
+
+func (mb *MsgBroker) isLoggable(level LogLevel) bool {
+
+	switch level {
+	case Debug:
+		return true
+
+	case Info:
+		if mb.logLevel == Error || mb.logLevel == Warn || mb.logLevel == Info {
+			return true
+		}
+	case Warn:
+		if mb.logLevel == Error || mb.logLevel == Warn {
+			return true
+		}
+	case Error:
+		if mb.logLevel == Error {
+			return true
+		}
+
+	}
+
+	return false
+
+}
+
 func PublishMsg[M MsgInterface](m M, mb MsgBroker) {
 
 	//
 	// reflect to get message properties
 	//
 	msg := reflect.ValueOf(&m).Elem()
+	msgKind := fmt.Sprintf(",%v", msg.Field(0).Interface())
+
+
+	//
+	// If it is a log message check to see if it is loggable
+	//
+	if msgKind == string(Log) {
+		msgLogLevel := LogLevel(fmt.Sprintf(",%v", msg.Field(1).Interface()))
+		if !mb.isLoggable(msgLogLevel) {
+			fmt.Println("msg.PublishMsg Don't publish log message due to logging level")
+			return
+		}
+	}
+
+	
+
 
 	//
 	// Create msgStr
