@@ -37,14 +37,9 @@ func main() {
 	)
 
 	if err != nil {
-		fmt.Println("broker create")
-	} else {
 		fmt.Println(err)
-
+		return
 	}
-	fmt.Println("config broker")
-
-	
 	mb.Configure()
 
 	//
@@ -65,8 +60,8 @@ func main() {
 	//
 	// Start the subscription reader, it will read from the the UARTS
 	//
-	mb.SubscriptionReader()
-
+	go mb.SubscriptionReader()
+	
 	/////////////////////////////////////////////////////////////////////////////
 	// Display
 	/////////////////////////////////////////////////////////////////////////////
@@ -116,6 +111,7 @@ func main() {
 
 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 115, "Test 0004", red)
 	display.FillRectangle(3, 70, 123, 1, red)
+
 
 	/////////////////////////////////////////////////////////////////////////////
 	// keypad keys
@@ -172,7 +168,9 @@ func main() {
 
 	dsp := ""
 
+
 	for k := range keyStrokes {
+
 		keyName := handset.GetKeyName(k)
 		fmt.Printf("[main] KeyName: %s\n", keyName)
 
