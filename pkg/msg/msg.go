@@ -3,7 +3,6 @@ package msg
 import (
 	"fmt"
 	"machine"
-	"reflect"
 	"strings"
 	"time"
 )
@@ -25,15 +24,15 @@ const (
 )
 
 // DEVTODO delete foo message eventually
+type FooMsg struct {
+	Kind MsgType
+	Name string
+}
 type LogMsg struct {
 	Kind   MsgType
 	Level  LogLevel
 	Source string
 	Body   string
-}
-type FooMsg struct {
-	Kind MsgType
-	Name string
 }
 
 type MsgInterface interface {
@@ -50,22 +49,41 @@ type UART interface {
 // Message Broker
 type MsgBroker struct {
 	logLevel LogLevel
+
 	uartUp   UART
+	uartUpTxPin machine.Pin
+	uartUpRxPin machine.Pin
+
 	uartDn   UART
+	uartDnTxPin machine.Pin
+	uartDnRxPin machine.Pin
+
 	fooCh    chan FooMsg
 	logCh    chan LogMsg
 }
 
 func NewBroker(
 	uartUp UART,
+	uartUpTxPin machine.Pin,
+	uartUpRxPin machine.Pin,
+
 	uartDn UART,
+	uartDnTxPin machine.Pin,
+	uartDnRxPin machine.Pin,
 
 ) (MsgBroker, error) {
 
 	return MsgBroker{
-		logLevel: Warn, // By default broker Warn and Error
+		logLevel: Info, // default
+
 		uartUp:      uartUp,
+		uartUpTxPin: uartUpTxPin,
+		uartUpRxPin: uartUpRxPin,
+
 		uartDn:      uartDn,
+		uartDnTxPin: uartDnTxPin,
+		uartDnRxPin: uartDnRxPin,
+
 		fooCh: nil,
 		logCh: nil,
 	}, nil
@@ -74,16 +92,15 @@ func NewBroker(
 
 func (mb *MsgBroker) Configure() {
 
-	fmt.Println("Configure")
-	// 	// Upstream UART
-	// if mb.uartUp != nil {
-	// 	mb.uartUp.Configure(machine.UARTConfig{TX: mb.uartUpTxPin, RX: mb.uartUpRxPin})
-	// }
+	// Upstream UART
+	if mb.uartUp != nil {
+		mb.uartUp.Configure(machine.UARTConfig{TX: mb.uartUpTxPin, RX: mb.uartUpRxPin})
+	}
 
-	// // Downstream UART
-	// if mb.uartDn != nil {
-	// 	mb.uartDn.Configure(machine.UARTConfig{TX: mb.uartDnTxPin, RX: mb.uartDnRxPin})
-	// }
+	// Downstream UART
+	if mb.uartDn != nil {
+		mb.uartDn.Configure(machine.UARTConfig{TX: mb.uartDnTxPin, RX: mb.uartDnRxPin})
+	}
 }
 
 func (mb *MsgBroker) SetFooCh(c chan FooMsg) {
@@ -197,66 +214,42 @@ func (mb *MsgBroker) isLoggable(level LogLevel) bool {
 
 }
 
-func (mb *MsgBroker) PublishTest(m string) {
-	mb.uartUp.Write([]byte(m))
-}
+func (mb *MsgBroker) PublishFoo(foo FooMsg) {
 
-func (mb *MsgBroker) PublishLog(l LogMsg) {
+	msgStr := "^" + string(foo.Kind)
+	msgStr = msgStr + "|" + string(foo.Name) + "~"
 
-	//debug
-	fmt.Printf("debug publishlog\n")
-	mb.uartUp.Write([]byte("printlog"))
-
-
-	msgStr := "^" + string(l.Kind)
-	msgStr = msgStr + "|" + string(l.Level)
-	msgStr = msgStr + "|" + string(l.Source)
-	msgStr = msgStr + "|" + string(l.Body) + "~"
-
-	// mb.uartUp.Write([]byte(msgStr))
-	machine.UART0.Write([]byte(msgStr)) // hack
+	mb.PublishMsg(msgStr)
 
 }
 
-func PublishMsg[M MsgInterface](m M, mb MsgBroker) {
+func (mb *MsgBroker) PublishLog(log LogMsg) {
 
-	//
-	// reflect to get message properties
-	//
-	msg := reflect.ValueOf(&m).Elem()
-	msgKind := fmt.Sprintf(",%v", msg.Field(0).Interface())
-
-	//
-	// If it is a log message check to see if it is loggable
-	//
-	if msgKind == string(Log) {
-		msgLogLevel := LogLevel(fmt.Sprintf(",%v", msg.Field(1).Interface()))
-		if !mb.isLoggable(msgLogLevel) {
-			fmt.Println("msg.PublishMsg Don't publish log message due to logging level")
-			return
-		}
+	// If not loggable do nothing
+	if !mb.isLoggable(log.Level) {
+		return
 	}
 
-	//
-	// Create msgStr
-	//
-	msgStr := fmt.Sprintf("^%v", msg.Field(0).Interface())
-	for i := 1; i < msg.NumField(); i++ {
-		msgStr = msgStr + fmt.Sprintf(",%v", msg.Field(i).Interface())
-	}
-	msgStr = msgStr + "~"
+	msgStr := "^" + string(log.Kind)
+	msgStr = msgStr + "|" + string(log.Level)
+	msgStr = msgStr + "|" + string(log.Source)
+	msgStr = msgStr + "|" + string(log.Body) + "~"
 
-	//
-	// Write to uart
-	//
+	mb.PublishMsg(msgStr)
+
+}
+
+func (mb *MsgBroker) PublishMsg(msg string){
+
 	if mb.uartUp != nil {
-		mb.uartUp.Write([]byte(msgStr))
+		mb.uartUp.Write([]byte(msg))
 	}
+	
 	if mb.uartDn != nil {
-		mb.uartDn.Write([]byte(msgStr))
+		mb.uartDn.Write([]byte(msg))
 	}
-
 }
+
 
 func unmarshallFoo(msgParts []string) *FooMsg {
 
@@ -290,4 +283,18 @@ func unmarshallLog(msgParts []string) *LogMsg {
 	}
 
 	return msg
+}
+
+func  (mb *MsgBroker) InfoLog(src string, body string){
+	mb.PublishLog(makeLogMsg(Info,src,body))
+}
+func  makeLogMsg(level LogLevel, src string, body string) LogMsg{
+
+	var logMsg LogMsg
+	logMsg.Kind = Log
+	logMsg.Level = level
+	logMsg.Source = src
+	logMsg.Body = body
+
+	return logMsg
 }

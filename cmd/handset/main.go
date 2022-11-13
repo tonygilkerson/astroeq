@@ -70,14 +70,26 @@ func main() {
 		RX: machine.UART0_RX_PIN,
 	})
 	
-	var uartDn msg.UART
 	var uartUp msg.UART
+	var uartUpTxPin machine.Pin
+	var uartUpRxPin machine.Pin
+
+	var uartDn msg.UART
+	var uartDnTxPin machine.Pin
+	var uartDnRxPin machine.Pin
+
 	uartUp = machine.UART0
+	uartUpTxPin = machine.UART0_TX_PIN
+	uartUpRxPin = machine.UART0_RX_PIN
 
 	mb, err := msg.NewBroker(
 		uartUp,
+		uartUpTxPin,
+		uartUpRxPin,
 		// The Handset is at the head of the conga line so no UART1 needed
 		uartDn,
+		uartDnTxPin,
+		uartDnRxPin,
 	)
 
   
@@ -228,17 +240,8 @@ func main() {
 		keyName := handset.GetKeyName(k)
 		fmt.Printf("[main] KeyName: %s\n", keyName)
 
-		
-		// Publish key
-		var logMsg msg.LogMsg
-		logMsg.Kind = msg.Log
-		logMsg.Level = msg.Info
-		logMsg.Source = "handset"
-		logMsg.Body = fmt.Sprintf("Key press [%s]", keyName)
-		// msg.PublishMsg(logMsg, mb)
-		mb.PublishTest(keyName)
-		//mb.PublishLog(logMsg)
-
+		body := fmt.Sprintf("Key: %s", keyName)
+		mb.InfoLog("Handset",body)
 
 		switch k {
 		case hid.EscKey:
