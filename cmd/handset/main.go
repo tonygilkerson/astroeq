@@ -14,6 +14,46 @@ import (
 	"tinygo.org/x/tinyfont/freemono"
 )
 
+/*
+
+
+	Pico									OLED 																						ssd1351 						keypad						UART
+	---------------------	-------------------------------------------			-----------------		----------------	-------------
+	3v3										VCC
+	GP0 																																																				UART0 TX
+	GP1 																																																				UART0 RX
+	GP2 																																											scrollDnKey
+	GP3 																																											zeroKey
+	GP4 																																											scrollUpKey
+	GP5 																																											sevenKey
+	GP6 																																											eightKey
+	GP7 																																											nineKey
+	GP8 																																											fourKey
+	GP9 																																											fiveKey
+	GP10 																																											sixKey
+	GP11 																																											oneKey
+	GP12 																																											twoKey
+	GP13 																																											threeKey
+	GP14 																																											rightKey
+	GP15 																																											leftKey
+	GP16 									SPI0_SDI_PIN (used for a hack, see commends in code below)
+	GP17 																																											downKey
+	GP18 									CLK	- clock input (SPI0_SCK_PIN)
+	GP19 									DIN	- data in     (SPI0_SDO_PIN)
+	GP20 																																											enterKey
+	GP21																																											upKey (move from 16)
+	GP22																																											escKey   (move from 18)
+	GP26																																											setupKey (move from 19)
+	GP27									CS 	- Chip select																csPin
+	GP28									DC	- Data/Cmd (high=data,low=cmd)							dcPin
+												RST	WHT	- Reset (low=active)										resetPin
+																																				enPin
+			 																																	rwPin
+																																				bus (machine.SPI0)
+												https://www.waveshare.com/product/displays/oled/pico-oled-2.23.htm
+*/
+
+
 func main() {
 
 	// run light
@@ -24,24 +64,30 @@ func main() {
 	/////////////////////////////////////////////////////////////////////////////
 
 	fmt.Println("Create new broker")
-	var noUART *machine.UART
+
+	machine.UART0.Configure(machine.UARTConfig{
+		TX: machine.UART0_TX_PIN,
+		RX: machine.UART0_RX_PIN,
+	})
+	
+	var uartDn msg.UART
+	var uartUp msg.UART
+	uartUp = machine.UART0
 
 	mb, err := msg.NewBroker(
-		machine.UART0,
-		machine.UART0_TX_PIN,
-		machine.UART0_RX_PIN,
+		uartUp,
 		// The Handset is at the head of the conga line so no UART1 needed
-		noUART,
-		machine.NoPin,
-		machine.NoPin,
+		uartDn,
 	)
 
+  
+  
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	mb.Configure()
-
+	
 	//
 	// Create subscription channels
 	//
@@ -61,7 +107,7 @@ func main() {
 	// Start the subscription reader, it will read from the the UARTS
 	//
 	go mb.SubscriptionReader()
-	
+
 	/////////////////////////////////////////////////////////////////////////////
 	// Display
 	/////////////////////////////////////////////////////////////////////////////
@@ -80,9 +126,16 @@ func main() {
 	cs := machine.Pin(27)
 	var en machine.Pin // ran out of pins
 	var rw machine.Pin // ran out of pins
-
+	
+	// HACK - I ran out of pins and so I used GP16 for rst, en and rw
+	//        I am not sure what this does in the ssd1351 driver but the
+	//        display functions that I need are working for now but this
+	//        might be an issue in the future
+	rst = machine.GP16
+	en = machine.GP16
+	rw = machine.GP16
+	
 	display := ssd1351.New(machine.SPI0, rst, dc, cs, en, rw)
-
 	display.Configure(ssd1351.Config{
 		Width:        128,
 		Height:       128,
@@ -116,10 +169,12 @@ func main() {
 	/////////////////////////////////////////////////////////////////////////////
 	// keypad keys
 	/////////////////////////////////////////////////////////////////////////////
+
 	zeroKey := machine.GP3
 	oneKey := machine.GP11
 	twoKey := machine.GP12
 	threeKey := machine.GP13
+
 	fourKey := machine.GP8
 	fiveKey := machine.GP9
 	sixKey := machine.GP10
@@ -168,19 +223,22 @@ func main() {
 
 	dsp := ""
 
-
 	for k := range keyStrokes {
 
 		keyName := handset.GetKeyName(k)
 		fmt.Printf("[main] KeyName: %s\n", keyName)
 
+		
 		// Publish key
 		var logMsg msg.LogMsg
 		logMsg.Kind = msg.Log
 		logMsg.Level = msg.Info
 		logMsg.Source = "handset"
 		logMsg.Body = fmt.Sprintf("Key press [%s]", keyName)
-		msg.PublishMsg(logMsg, mb)
+		// msg.PublishMsg(logMsg, mb)
+		mb.PublishTest(keyName)
+		//mb.PublishLog(logMsg)
+
 
 		switch k {
 		case hid.EscKey:
@@ -204,7 +262,7 @@ func runLight() {
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	// blink run light for a bit seconds so I can tell it is starting
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 10; i++ {
 		led.High()
 		time.Sleep(time.Millisecond * 100)
 		led.Low()

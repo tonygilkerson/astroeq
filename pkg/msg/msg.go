@@ -40,44 +40,32 @@ type MsgInterface interface {
 	FooMsg | LogMsg
 }
 
+type UART interface {
+	Configure(config machine.UARTConfig) error
+	Buffered() int
+	ReadByte() (byte, error)
+	Write(data []byte) (n int, err error)
+}
+
 // Message Broker
 type MsgBroker struct {
 	logLevel LogLevel
-
-	uartUp      *machine.UART
-	uartUpTxPin machine.Pin
-	uartUpRxPin machine.Pin
-
-	uartDn      *machine.UART
-	uartDnTxPin machine.Pin
-	uartDnRxPin machine.Pin
-
-	fooCh chan FooMsg
-	logCh chan LogMsg
+	uartUp   UART
+	uartDn   UART
+	fooCh    chan FooMsg
+	logCh    chan LogMsg
 }
 
 func NewBroker(
+	uartUp UART,
+	uartDn UART,
 
-	uartUp *machine.UART,
-	uartUpTxPin machine.Pin,
-	uartUpRxPin machine.Pin,
-
-	uartDn *machine.UART,
-	uartDnTxPin machine.Pin,
-	uartDnRxPin machine.Pin,
 ) (MsgBroker, error) {
 
 	return MsgBroker{
 		logLevel: Warn, // By default broker Warn and Error
-
 		uartUp:      uartUp,
-		uartUpTxPin: uartUpTxPin,
-		uartUpRxPin: uartUpRxPin,
-
 		uartDn:      uartDn,
-		uartDnTxPin: uartDnTxPin,
-		uartDnRxPin: uartDnRxPin,
-
 		fooCh: nil,
 		logCh: nil,
 	}, nil
@@ -85,11 +73,17 @@ func NewBroker(
 }
 
 func (mb *MsgBroker) Configure() {
-	// Upstream UART
-	mb.uartUp.Configure(machine.UARTConfig{TX: mb.uartUpTxPin, RX: mb.uartUpRxPin})
 
-	// Downstream UART
-	mb.uartDn.Configure(machine.UARTConfig{TX: mb.uartUpTxPin, RX: mb.uartUpRxPin})
+	fmt.Println("Configure")
+	// 	// Upstream UART
+	// if mb.uartUp != nil {
+	// 	mb.uartUp.Configure(machine.UARTConfig{TX: mb.uartUpTxPin, RX: mb.uartUpRxPin})
+	// }
+
+	// // Downstream UART
+	// if mb.uartDn != nil {
+	// 	mb.uartDn.Configure(machine.UARTConfig{TX: mb.uartDnTxPin, RX: mb.uartDnRxPin})
+	// }
 }
 
 func (mb *MsgBroker) SetFooCh(c chan FooMsg) {
@@ -203,6 +197,27 @@ func (mb *MsgBroker) isLoggable(level LogLevel) bool {
 
 }
 
+func (mb *MsgBroker) PublishTest(m string) {
+	mb.uartUp.Write([]byte(m))
+}
+
+func (mb *MsgBroker) PublishLog(l LogMsg) {
+
+	//debug
+	fmt.Printf("debug publishlog\n")
+	mb.uartUp.Write([]byte("printlog"))
+
+
+	msgStr := "^" + string(l.Kind)
+	msgStr = msgStr + "|" + string(l.Level)
+	msgStr = msgStr + "|" + string(l.Source)
+	msgStr = msgStr + "|" + string(l.Body) + "~"
+
+	// mb.uartUp.Write([]byte(msgStr))
+	machine.UART0.Write([]byte(msgStr)) // hack
+
+}
+
 func PublishMsg[M MsgInterface](m M, mb MsgBroker) {
 
 	//
@@ -210,7 +225,6 @@ func PublishMsg[M MsgInterface](m M, mb MsgBroker) {
 	//
 	msg := reflect.ValueOf(&m).Elem()
 	msgKind := fmt.Sprintf(",%v", msg.Field(0).Interface())
-
 
 	//
 	// If it is a log message check to see if it is loggable
@@ -222,9 +236,6 @@ func PublishMsg[M MsgInterface](m M, mb MsgBroker) {
 			return
 		}
 	}
-
-	
-
 
 	//
 	// Create msgStr
