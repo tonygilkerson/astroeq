@@ -156,7 +156,8 @@ func writeConsole(display st7789.Device, ch chan string) {
 	black := color.RGBA{0, 0, 0, 255}
 	// white := color.RGBA{255, 255, 255, 255}
 	// blue := color.RGBA{0, 0, 255, 255}
-	green := color.RGBA{0, 255, 0, 255}
+	// green := color.RGBA{0, 255, 0, 255}
+	greenDim := color.RGBA{0, 126, 0, 255}
 
 	cls(&display)
 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 20, "123456789-123456789-x", red)
@@ -183,7 +184,7 @@ func writeConsole(display st7789.Device, ch chan string) {
 		}
 		
 		if l > 9 {
-			display.DrawFastHLine(0, 300, vline+5, black) // erase the last line
+			display.DrawFastHLine(0, 300, vline+7, black) // erase the last line
 			l = 1
 		}
 
@@ -198,7 +199,7 @@ func writeConsole(display st7789.Device, ch chan string) {
 
 		tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, vline, msg, red)
 		fmt.Println("vline: ", vline)
-		display.DrawFastHLine(0, 300, vline+5, green)
+		display.DrawFastHLine(0, 300, vline+7, greenDim)
 
 		l++
 	}
