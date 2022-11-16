@@ -94,7 +94,7 @@ func main() {
 	// writeConsole
 	/////////////////////////////////////////////////////////////////////////////
 
-	writeConsole(display, consoleCh)
+	GoConsole(display, consoleCh)
 }
 
 func runLight() {
@@ -141,12 +141,13 @@ func fooConsumer(fooCh chan msg.FooMsg, mb msg.MsgBroker, consoleCh chan string)
 func logConsumer(logCh chan msg.LogMsg, mb msg.MsgBroker, consoleCh chan string) {
 
 	for msg := range logCh {
-		s := fmt.Sprintf("%s: %s %s %s", msg.Kind, msg.Level, msg.Source, msg.Body)
+		s := fmt.Sprintf("%s: %s %s", msg.Kind, msg.Source, msg.Level)
 		consoleCh <- s
+		consoleCh <- msg.Body
 	}
 }
 
-func writeConsole(display st7789.Device, ch chan string) {
+func GoConsole(display st7789.Device, ch chan string) {
 
 	width, height := display.Size()
 	fmt.Printf("width: %v, height: %v\n", width, height)

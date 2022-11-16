@@ -6,6 +6,15 @@ import (
 	"time"
 )
 
+const Version string = "v0.0.1"
+
+type State uint8
+
+const (
+	Initial State = iota
+	GetVersion
+)
+
 type Key uint8
 
 const (
@@ -42,6 +51,7 @@ var keyPressed Key
 var keyStrokes = make(chan Key, 100)
 
 type Handset struct {
+	state       State
 	scrollDnKey machine.Pin
 	zeroKey     machine.Pin
 	scrollUpKey machine.Pin
@@ -80,7 +90,7 @@ func NewHandset(
 	sevenKey machine.Pin,
 	eightKey machine.Pin,
 	nineKey machine.Pin,
-	
+
 	scrollDnKey machine.Pin,
 	scrollUpKey machine.Pin,
 
@@ -94,6 +104,7 @@ func NewHandset(
 	enterKey machine.Pin,
 ) (Handset, error) {
 	return Handset{
+		state:       Initial,
 		scrollDnKey: scrollDnKey,
 		zeroKey:     zeroKey,
 		scrollUpKey: scrollUpKey,
@@ -238,3 +249,20 @@ func (hs *Handset) GetKeyName(k Key) string {
 	}
 }
 
+func (hs *Handset) StateMachine(key Key) string {
+
+	// output to display
+	var out string
+
+	switch hs.state {
+	case Initial:
+		out = "Version\n"
+		out = out + Version
+		hs.state = GetVersion
+
+	case GetVersion:
+		out = "todo"
+	}
+
+	return out
+}
