@@ -2,23 +2,21 @@ package hid
 
 import (
 	// "fmt"
+	"fmt"
 	"machine"
 	"time"
 )
 
 const Version string = "v0.0.1"
-
-type State uint8
+const MMDDYY = "010206"
 
 const (
 	First = iota
 	ShowVersion
 	SetDate
+	SetDateError
 	Next
 )
-
-var stateMachineOut string
-var currentDate string
 
 type Key uint8
 
@@ -48,12 +46,7 @@ const (
 	EnterKey
 )
 
-// If any key is pressed record the corresponding pin
-var keyPressed Key
-
-// As keys are pressed they are published to the keyStrokes chan
-// a buffer of 100 ensure key stroke publishing is not blocked
-var keyStrokes = make(chan Key, 100)
+type State uint8
 
 type Handset struct {
 	state       State
@@ -81,6 +74,20 @@ type Handset struct {
 	escKey   machine.Pin
 	setupKey machine.Pin
 	enterKey machine.Pin
+
+	// If any key is pressed record the corresponding pin
+	keyPressed Key
+
+	// As keys are pressed they are published to the keyStrokes chan
+	// a buffer of 100 ensure key stroke publishing is not blocked
+	keyStrokes chan Key
+
+	// Display output
+	dspOut string
+
+	// Current data set by user at startup in MMDDYY format
+	currentDateStr string
+	currentDate    time.Time
 }
 
 // Returns a new Handset
@@ -129,6 +136,7 @@ func NewHandset(
 		escKey:      escKey,
 		setupKey:    setupKey,
 		enterKey:    enterKey,
+		keyStrokes:  make(chan Key, 100),
 	}, nil
 }
 
@@ -156,53 +164,53 @@ func (hs *Handset) Configure() chan Key {
 	hs.setupKey.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
 	hs.enterKey.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
 
-	hs.zeroKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = ZeroKey })
-	hs.oneKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = OneKey })
-	hs.twoKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = TwoKey })
-	hs.threeKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = ThreeKey })
-	hs.fourKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = FourKey })
-	hs.fiveKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = FiveKey })
-	hs.sixKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = SixKey })
-	hs.sevenKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = SevenKey })
-	hs.eightKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = EightKey })
-	hs.nineKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = NineKey })
-	hs.scrollUpKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = ScrollUpKey })
-	hs.scrollDnKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = ScrollDnKey })
-	hs.rightKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = RightKey })
-	hs.leftKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = LeftKey })
-	hs.upKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = UpKey })
-	hs.downKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = DownKey })
-	hs.escKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = EscKey })
-	hs.setupKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = SetupKey })
-	hs.enterKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { keyPressed = EnterKey })
+	hs.zeroKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = ZeroKey })
+	hs.oneKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = OneKey })
+	hs.twoKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = TwoKey })
+	hs.threeKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = ThreeKey })
+	hs.fourKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = FourKey })
+	hs.fiveKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = FiveKey })
+	hs.sixKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = SixKey })
+	hs.sevenKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = SevenKey })
+	hs.eightKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = EightKey })
+	hs.nineKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = NineKey })
+	hs.scrollUpKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = ScrollUpKey })
+	hs.scrollDnKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = ScrollDnKey })
+	hs.rightKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = RightKey })
+	hs.leftKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = LeftKey })
+	hs.upKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = UpKey })
+	hs.downKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = DownKey })
+	hs.escKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = EscKey })
+	hs.setupKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = SetupKey })
+	hs.enterKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = EnterKey })
 
 	// Start go routine that will listen for key strokes and publish them on a channel
-	go publishKeys()
+	go hs.publishKeys()
 
-	return keyStrokes
+	return hs.keyStrokes
 
 }
 
 // PublishKeys will capture the keys pressed and publish them to the keyStrokes channel
-func publishKeys() {
+func (hs *Handset) publishKeys() {
 	for {
 
 		// If any key was pressed
-		if keyPressed != UndefinedKey {
+		if hs.keyPressed != UndefinedKey {
 
 			//
 			//  After a small delay if the key pressed has not changed, consider it "pressed"
 			//
-			key := keyPressed
+			key := hs.keyPressed
 			time.Sleep(time.Millisecond * 100)
 			// fmt.Printf("[publishKeys] value: %v \n", key)
 
-			if key == keyPressed {
-				keyStrokes <- keyPressed
-				keyPressed = UndefinedKey //reset for next key press
+			if key == hs.keyPressed {
+				hs.keyStrokes <- hs.keyPressed
+				hs.keyPressed = UndefinedKey //reset for next key press
 			}
 		}
-		time.Sleep(time.Millisecond * 500)
+		time.Sleep(time.Millisecond * 400)
 	}
 
 }
@@ -264,19 +272,39 @@ func (hs *Handset) StateMachine(key Key) string {
 	case ShowVersion:
 		if key == EnterKey {
 			hs.state = SetDate
-			currentDate = ""
+			hs.currentDateStr = ""
 		}
 
 	case SetDate:
 
 		if key == EscKey {
 			hs.state = ShowVersion
+
 		} else if key == EnterKey {
-			hs.state = Next
-		} else if key == LeftKey && len(currentDate) > 0 {
-			currentDate = currentDate[:len(currentDate)-1]
-		} else if len(currentDate) < 6 && keyIsDigit(key) {
-			currentDate = currentDate + hs.GetKeyName(key)
+			var err error
+			hs.currentDate, err = time.Parse(MMDDYY, hs.currentDateStr)
+
+			if err != nil {
+				hs.state = SetDateError
+			} else {
+				hs.state = Next
+			}
+
+		} else if key == LeftKey && len(hs.currentDateStr) > 0 {
+			hs.currentDateStr = hs.currentDateStr[:len(hs.currentDateStr)-1]
+
+		} else {
+			//
+			// Build up a date string until we have 6 characters to make mmddyy
+			// then try to convert it to a date
+			if len(hs.currentDateStr) < 6 && keyIsDigit(key) {
+				hs.currentDateStr = hs.currentDateStr + hs.GetKeyName(key)
+			}
+		}
+
+	case SetDateError:
+		if key == EscKey {
+			hs.state = SetDate
 		}
 
 	case Next:
@@ -296,18 +324,20 @@ func (hs *Handset) StateMachine(key Key) string {
 	//
 	switch hs.state {
 	case First:
-		stateMachineOut = "Version\n" + Version
+		hs.dspOut = "Version\n" + Version
 	case ShowVersion:
-		stateMachineOut = "Version\n" + Version
+		hs.dspOut = "Version\n" + Version
 	case SetDate:
-		stateMachineOut = "Set Date\nMMDDYY:\n" + currentDate
+		hs.dspOut = "Set Date\nMMDDYY:\n" + hs.currentDateStr
+	case SetDateError:
+		hs.dspOut = fmt.Sprintf("Set Date\nMMDDYY:\n%s\nERR", hs.currentDateStr)
 	case Next:
-		stateMachineOut = "Next"
+		hs.dspOut = "Next"
 	default:
-		stateMachineOut = "Version\n" + Version
+		hs.dspOut = "Bad State\n"
 	}
 
-	return stateMachineOut
+	return hs.dspOut
 }
 
 func keyIsDigit(key Key) bool {
@@ -336,3 +366,5 @@ func keyIsDigit(key Key) bool {
 		return false
 	}
 }
+
+func setDate(mmddyy string)
