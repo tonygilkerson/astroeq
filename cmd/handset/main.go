@@ -299,8 +299,7 @@ func goHandsetStateMachine(handset hid.Handset, display ssd1351.Device, keyStrok
 		display.FillScreen(color.RGBA{0, 0, 0, 0})
 
 		keyName := handset.GetKeyName(k)
-		body := fmt.Sprintf("Key: %s", keyName)
-		mb.InfoLog("Handset",body)
+		mb.InfoLog("Handset",fmt.Sprintf("Key: %s", keyName))
 
 		out := handset.StateMachine(k)
 		tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 15, out, red)

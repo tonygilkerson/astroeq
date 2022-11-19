@@ -11,9 +11,14 @@ const Version string = "v0.0.1"
 type State uint8
 
 const (
-	Initial State = iota
-	GetVersion
+	First = iota
+	ShowVersion
+	SetDate
+	Next
 )
+
+var stateMachineOut string
+var currentDate string
 
 type Key uint8
 
@@ -104,7 +109,7 @@ func NewHandset(
 	enterKey machine.Pin,
 ) (Handset, error) {
 	return Handset{
-		state:       Initial,
+		state:       First,
 		scrollDnKey: scrollDnKey,
 		zeroKey:     zeroKey,
 		scrollUpKey: scrollUpKey,
@@ -251,18 +256,83 @@ func (hs *Handset) GetKeyName(k Key) string {
 
 func (hs *Handset) StateMachine(key Key) string {
 
-	// output to display
-	var out string
-
 	switch hs.state {
-	case Initial:
-		out = "Version\n"
-		out = out + Version
-		hs.state = GetVersion
 
-	case GetVersion:
-		out = "todo"
+	case First:
+		hs.state = ShowVersion
+
+	case ShowVersion:
+		if key == EnterKey {
+			hs.state = SetDate
+			currentDate = ""
+		}
+
+	case SetDate:
+
+		if key == EscKey {
+			hs.state = ShowVersion
+		} else if key == EnterKey {
+			hs.state = Next
+		} else if key == LeftKey && len(currentDate) > 0 {
+			currentDate = currentDate[:len(currentDate)-1]
+		} else if len(currentDate) < 6 && keyIsDigit(key) {
+			currentDate = currentDate + hs.GetKeyName(key)
+		}
+
+	case Next:
+
+		if key == EscKey {
+			hs.state = SetDate
+		}
+
+		if key == EnterKey {
+			hs.state = ShowVersion
+		}
+
 	}
 
-	return out
+	//
+	// Set prompt
+	//
+	switch hs.state {
+	case First:
+		stateMachineOut = "Version\n" + Version
+	case ShowVersion:
+		stateMachineOut = "Version\n" + Version
+	case SetDate:
+		stateMachineOut = "Set Date\nMMDDYY:\n" + currentDate
+	case Next:
+		stateMachineOut = "Next"
+	default:
+		stateMachineOut = "Version\n" + Version
+	}
+
+	return stateMachineOut
+}
+
+func keyIsDigit(key Key) bool {
+	switch key {
+	case ZeroKey:
+		return true
+	case OneKey:
+		return true
+	case TwoKey:
+		return true
+	case ThreeKey:
+		return true
+	case FourKey:
+		return true
+	case FiveKey:
+		return true
+	case SixKey:
+		return true
+	case SevenKey:
+		return true
+	case EightKey:
+		return true
+	case NineKey:
+		return true
+	default:
+		return false
+	}
 }
