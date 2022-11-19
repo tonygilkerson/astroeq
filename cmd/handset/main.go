@@ -256,44 +256,13 @@ func fooConsumer(c chan msg.FooMsg, mb msg.MsgBroker) {
 }
 
 
-// func goHandsetStateMachine(handset hid.Handset, display ssd1351.Device, keyStrokesCh chan hid.Key, mb msg.MsgBroker){
-
-// 	//
-// 	// Capture key strokes
-// 	//
-// 	red := color.RGBA{0, 0, 255, 255}
-// 	dsp := ""
-
-// 	for k := range keyStrokesCh {
-
-// 		keyName := handset.GetKeyName(k)
-// 		fmt.Printf("[main] KeyName: %s\n", keyName)
-
-// 		body := fmt.Sprintf("Key: %s", keyName)
-// 		mb.InfoLog("Handset",body)
-
-// 		switch k {
-// 		case hid.EscKey:
-// 			display.FillScreen(color.RGBA{0, 0, 0, 0}) // Clear screen
-// 			dsp = ""
-// 		case hid.EnterKey:
-// 			dsp = dsp + "\n"
-// 		default:
-// 			dsp = dsp + keyName + " "
-// 		}
-
-// 		tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 15, dsp, red)
-// 	}
-
-// }
-
 func goHandsetStateMachine(handset hid.Handset, display ssd1351.Device, keyStrokesCh chan hid.Key, mb msg.MsgBroker){
 
 	red := color.RGBA{0, 0, 255, 255}
 	var noKey hid.Key
 	
 	out := handset.StateMachine(noKey)
-	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 15, out, red)
+	tinyfont.WriteLine(&display, &freemono.Regular9pt7b, 3, 15, out, red)
 
 	for k := range keyStrokesCh {
 		display.FillScreen(color.RGBA{0, 0, 0, 0})
@@ -302,8 +271,7 @@ func goHandsetStateMachine(handset hid.Handset, display ssd1351.Device, keyStrok
 		mb.InfoLog("Handset",fmt.Sprintf("Key: %s", keyName))
 
 		out := handset.StateMachine(k)
-		tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 15, out, red)
-
+		tinyfont.WriteLine(&display, &freemono.Regular9pt7b, 3, 15, out, red)
 		
 	}
 
