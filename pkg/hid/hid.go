@@ -14,10 +14,12 @@ const (
 	First = iota
 	ShowVersion
 	SetDate
+	SetTime
 	SetLatitude
 	SetLongitude
 	Last
 	SetDateError
+	SetTimeError
 )
 
 type Key uint8
@@ -89,7 +91,8 @@ type Handset struct {
 
 	// Current data set by user at startup in MMDDYY format
 	currentDateStr string
-	currentDate    time.Time
+	currentTimeStr string
+	currentTime    time.Time
 
 	// The latitude and longitude of your current location in DD format
 	//
@@ -299,7 +302,8 @@ func (hs *Handset) StateMachine(key Key) string {
 
 		if key == EnterKey {
 			var err error
-			hs.currentDate, err = time.Parse(MMDDYY, hs.currentDateStr)
+			// RFC3339 example: "2006-01-02T15:04:05+05:00"
+			hs.currentTime, err = time.Parse(time.RFC3339, hs.currentDateStr+"T10:00:00+00:00")
 
 			if err != nil {
 				hs.state = SetDateError
@@ -312,7 +316,13 @@ func (hs *Handset) StateMachine(key Key) string {
 			if key == LeftKey && len(hs.currentDateStr) > 0 {
 				hs.currentDateStr = hs.currentDateStr[:len(hs.currentDateStr)-1]
 
-			} else if len(hs.currentDateStr) < 6 && keyIsDigit(key) {
+			} else if len(hs.currentDateStr) == 4 && keyIsDigit(key) {
+				hs.currentDateStr = hs.currentDateStr + "-" + hs.GetKeyName(key)
+
+			} else if len(hs.currentDateStr) == 7 && keyIsDigit(key) {
+				hs.currentDateStr = hs.currentDateStr + "-" + hs.GetKeyName(key)
+
+			} else if len(hs.currentDateStr) < 10 && keyIsDigit(key) {
 				hs.currentDateStr = hs.currentDateStr + hs.GetKeyName(key)
 
 			}
@@ -321,6 +331,49 @@ func (hs *Handset) StateMachine(key Key) string {
 	case SetDateError:
 		if key == EscKey {
 			hs.state = SetDate
+		}
+
+	case SetTime:
+
+		if key == EnterKey {
+			var err error
+			// RFC3339 example: "2006-01-02T15:04:05+05:00"
+			hs.currentTime, err = time.Parse(time.RFC3339, hs.currentDateStr+"T"+hs.currentTimeStr+":00")
+
+			if err != nil {
+				hs.state = SetTimeError
+			} else {
+				hs.state = SetTime + 1
+			}
+
+		} else if !doNav(key, &hs.state) {
+
+			if key == LeftKey && len(hs.currentTimeStr) > 0 {
+				hs.currentTimeStr = hs.currentTimeStr[:len(hs.currentTimeStr)-1]
+
+			} else if len(hs.currentTimeStr) == 2 && keyIsDigit(key) {
+				hs.currentTimeStr = hs.currentTimeStr + ":" + hs.GetKeyName(key)
+
+			} else if len(hs.currentTimeStr) == 5 && keyIsDigit(key) {
+				hs.currentTimeStr = hs.currentTimeStr + ":" + hs.GetKeyName(key)
+
+			} else if len(hs.currentTimeStr) == 8 {
+				
+				if key == ScrollDnKey {
+					hs.currentTimeStr = hs.currentTimeStr + "-"
+				} else if key == ScrollUpKey {
+					hs.currentTimeStr = hs.currentTimeStr + "+"
+				}
+
+			} else if len(hs.currentTimeStr) < 11 && keyIsDigit(key) {
+				hs.currentTimeStr = hs.currentTimeStr + hs.GetKeyName(key)
+
+			}
+		}
+
+	case SetTimeError:
+		if key == EscKey {
+			hs.state = SetTime
 		}
 
 	case SetLatitude:
@@ -333,11 +386,13 @@ func (hs *Handset) StateMachine(key Key) string {
 			} else if len(hs.locationLatitudeStr) == 3 && keyIsDigit(key) {
 				hs.locationLatitudeStr = hs.locationLatitudeStr + "." + hs.GetKeyName(key)
 
-			} else if len(hs.locationLatitudeStr) == 0 && key == ScrollDnKey {
-				hs.locationLatitudeStr = "-"
-
-			} else if len(hs.locationLatitudeStr) == 0 && key == ScrollUpKey {
-				hs.locationLatitudeStr = "+"
+			} else if len(hs.locationLatitudeStr) == 0  {
+				
+				if key == ScrollDnKey {
+					hs.locationLatitudeStr = "-"
+				} else if key == ScrollUpKey {
+					hs.locationLatitudeStr = "+"
+				}
 
 			} else if len(hs.locationLatitudeStr) < 8 && keyIsDigit(key) {
 				hs.locationLatitudeStr = hs.locationLatitudeStr + hs.GetKeyName(key)
@@ -379,20 +434,34 @@ func (hs *Handset) StateMachine(key Key) string {
 	switch hs.state {
 	case First:
 		hs.dspOut = "Version\n" + Version
+
 	case ShowVersion:
 		hs.dspOut = "Version\n" + Version
+
 	case SetDate:
-		hs.dspOut = "Set Date\nMMDDYY\n-----------\n" + hs.currentDateStr
+		hs.dspOut = "Set Date\nYYYY-MM-DD\n-----------\n" + hs.currentDateStr
+
 	case SetDateError:
-		hs.dspOut = "Set Date\nMMDDYY:\n-----------\n" + hs.currentDateStr + "\n>>ERROR<<"
+		hs.dspOut = "Set Date\nYYYY-MM-DD\n-----------\n" + hs.currentDateStr + "\n>>ERROR<<"
+
+	case SetTime:
+		hs.dspOut = "Set Time\nHH:MM:SS+hh\n-----------\n" + hs.currentTimeStr
+
+	case SetTimeError:
+		hs.dspOut = "Set Time\nHH:MM:SS+hh\n-----------\n" + hs.currentTimeStr + "\n>>ERROR<<"
+
 	case SetLatitude:
-		hs.dspOut = "Set\nLatitude\n+/-DD.dddd\n-----------\n" + hs.locationLatitudeStr
+		hs.dspOut = "Set\nLatitude\n+DD.dddd\n-----------\n" + hs.locationLatitudeStr
+
 	case SetLongitude:
-		hs.dspOut = "Set\nLongitude\n+/-DD.dddd\n-----------\n" + hs.locationLongitudeStr
+		hs.dspOut = "Set\nLongitude\n+DD.dddd\n-----------\n" + hs.locationLongitudeStr
+
 	case Last:
 		hs.dspOut = "Press Esc\nto go back"
+
 	default:
 		hs.dspOut = "Bad State\n"
+
 	}
 
 	return hs.dspOut
@@ -426,7 +495,6 @@ func keyIsDigit(key Key) bool {
 }
 
 func doNav(key Key, state *State) bool {
-
 
 	if key == EscKey {
 
