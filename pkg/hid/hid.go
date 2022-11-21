@@ -3,12 +3,14 @@ package hid
 import (
 	"machine"
 	"time"
+	"strconv"
 )
 
-const Version string = "v0-alpha2"
+const Version string = "v0-alpha4"
 const MMDDYY = "010206"
 const LocationLatitudeHome = "+39.8491"
 const LocationLongitudeHome = "-83.9768"
+const LocationElevation = "+270"
 
 const (
 	First = iota
@@ -17,6 +19,7 @@ const (
 	SetTime
 	SetLatitude
 	SetLongitude
+	SetElevation
 	Last
 	SetDateError
 	SetTimeError
@@ -112,6 +115,9 @@ type Handset struct {
 
 	locationLatitudeStr  string
 	locationLongitudeStr string
+
+	locationElevationStr string
+	locationElevation int16
 }
 
 // Returns a new Handset
@@ -163,6 +169,7 @@ func NewHandset(
 		keyStrokes:           make(chan Key, 100),
 		locationLatitudeStr:  LocationLatitudeHome,
 		locationLongitudeStr: LocationLongitudeHome,
+		locationElevationStr: LocationElevation,
 	}, nil
 }
 
@@ -410,14 +417,42 @@ func (hs *Handset) StateMachine(key Key) string {
 			} else if len(hs.locationLongitudeStr) == 3 && keyIsDigit(key) {
 				hs.locationLongitudeStr = hs.locationLongitudeStr + "." + hs.GetKeyName(key)
 
-			} else if len(hs.locationLongitudeStr) == 0 && key == ScrollDnKey {
-				hs.locationLongitudeStr = "-"
-
-			} else if len(hs.locationLongitudeStr) == 0 && key == ScrollUpKey {
-				hs.locationLongitudeStr = "+"
+			} else if len(hs.locationLongitudeStr) == 0  {
+				
+				if key == ScrollDnKey {
+					hs.locationLongitudeStr = "-"
+				} else if key == ScrollUpKey {
+					hs.locationLongitudeStr = "+"
+				}
 
 			} else if len(hs.locationLongitudeStr) < 8 && keyIsDigit(key) {
 				hs.locationLongitudeStr = hs.locationLongitudeStr + hs.GetKeyName(key)
+
+			}
+		}
+
+	case SetElevation:
+
+		if key == EnterKey {
+			elevation, _ := strconv.Atoi(hs.locationElevationStr)
+			hs.locationElevation = int16(elevation)
+			hs.state++
+
+		} else if !doNav(key, &hs.state) {
+
+			if key == LeftKey && len(hs.locationElevationStr) > 0 {
+				hs.locationElevationStr = hs.locationElevationStr[:len(hs.locationElevationStr)-1]
+
+			} else if len(hs.locationElevationStr) == 0  {
+				
+				if key == ScrollDnKey {
+					hs.locationElevationStr = "-"
+				} else if key == ScrollUpKey {
+					hs.locationElevationStr = "+"
+				}
+
+			} else if len(hs.locationElevationStr) < 5 && keyIsDigit(key) {
+				hs.locationElevationStr = hs.locationElevationStr + hs.GetKeyName(key)
 
 			}
 		}
@@ -455,6 +490,9 @@ func (hs *Handset) StateMachine(key Key) string {
 
 	case SetLongitude:
 		hs.dspOut = "Set\nLongitude\n+DD.dddd\n-----------\n" + hs.locationLongitudeStr
+
+	case SetElevation:
+		hs.dspOut = "Set\nElevation\n+DDDD\n-----------\n" + hs.locationElevationStr
 
 	case Last:
 		hs.dspOut = "Press Esc\nto go back"
