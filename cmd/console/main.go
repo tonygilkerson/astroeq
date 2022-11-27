@@ -154,11 +154,11 @@ func GoConsole(display st7789.Device, ch chan string) {
 
 	//red := color.RGBA{126, 0, 0, 255}
 	red := color.RGBA{255, 0, 0, 255}
-	black := color.RGBA{0, 0, 0, 255}
+	// black := color.RGBA{0, 0, 0, 255}
 	// white := color.RGBA{255, 255, 255, 255}
 	// blue := color.RGBA{0, 0, 255, 255}
-	// green := color.RGBA{0, 255, 0, 255}
-	greenDim := color.RGBA{0, 126, 0, 255}
+	green := color.RGBA{0, 255, 0, 255}
+	// greenDim := color.RGBA{0, 126, 0, 255}
 
 	cls(&display)
 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 20, "123456789-123456789-x", red)
@@ -173,36 +173,41 @@ func GoConsole(display st7789.Device, ch chan string) {
 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 200, "Ready...10", red)
 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 220, "Ready...11", red)
 
-	var l int16 = 1
-	var first bool = true
-	var toggle bool = true
-	var vline int16 = 0
+	// var l int16 = 1
+	// var first bool = true
+	// var toggle bool = true
+	// var vline int16 = 0
+
+	// for msg := range ch {
+	// 	if first {
+	// 		cls(&display)
+	// 		first = false
+	// 	}
+		
+	// 	if l > 9 {
+	// 		display.DrawFastHLine(0, 300, vline+7, black) // erase the last line
+	// 		l = 1
+	// 	}
+
+	// 	vline = int16(l * 25)
+	// 	if toggle {
+	// 		toggle = false
+	// 		display.FillRectangle(0, vline-20, 320, 25, black)
+	// 	} else {
+	// 		toggle = true
+	// 		display.FillRectangle(0, vline-20, 320, 25, black)
+	// 	}
+
+	// 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, vline, msg, red)
+	// 	fmt.Println("vline: ", vline)
+	// 	display.DrawFastHLine(0, 300, vline+7, greenDim)
+
+	// 	l++
+	// }
 
 	for msg := range ch {
-		if first {
-			cls(&display)
-			first = false
-		}
-		
-		if l > 9 {
-			display.DrawFastHLine(0, 300, vline+7, black) // erase the last line
-			l = 1
-		}
-
-		vline = int16(l * 25)
-		if toggle {
-			toggle = false
-			display.FillRectangle(0, vline-20, 320, 25, black)
-		} else {
-			toggle = true
-			display.FillRectangle(0, vline-20, 320, 25, black)
-		}
-
-		tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, vline, msg, red)
-		fmt.Println("vline: ", vline)
-		display.DrawFastHLine(0, 300, vline+7, greenDim)
-
-		l++
+		cls(&display)
+		tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 20, msg, green)
 	}
 
 }
