@@ -20,6 +20,8 @@ const (
 	SetLatitude
 	SetLongitude
 	SetElevation
+	UtilityMenu
+	ObjectsMenu
 	Last
 	SetDateError
 	SetTimeError
@@ -56,6 +58,7 @@ const (
 type State uint8
 
 type Handset struct {
+	isSetup     bool
 	state       State
 	scrollDnKey machine.Pin
 	zeroKey     machine.Pin
@@ -146,6 +149,7 @@ func NewHandset(
 	enterKey machine.Pin,
 ) (Handset, error) {
 	return Handset{
+		isSetup:              false,
 		state:                First,
 		scrollDnKey:          scrollDnKey,
 		zeroKey:              zeroKey,
@@ -345,9 +349,18 @@ func (hs *Handset) StateMachine(key Key) string {
 	switch hs.state {
 
 	case First:
-		hs.state++
+
+		if key == OneKey {
+			hs.state++
+		} else if key == TwoKey {
+			hs.state = UtilityMenu
+		} else if key == ThreeKey {
+			hs.state = ObjectsMenu
+		}
+
 
 	case ShowVersion:
+		hs.isSetup = false
 		doNav(key, &hs.state)
 
 	case SetDate:
@@ -481,7 +494,13 @@ func (hs *Handset) StateMachine(key Key) string {
 		if key == EnterKey {
 			elevation, _ := strconv.Atoi(hs.locationElevationStr)
 			hs.locationElevation = int16(elevation)
-			hs.state++
+			// DEVTODO - If we get to this point then we can turn we are considered to be setup
+			//           However it is possible to go back into the setup and "unset" a field
+			//           In this case we are not considered setup but I am not resetting the
+			//           hs.isSetup field.  I am looking for a clean easy way to do this but for now
+			//           hs.isSetup can be wrong under certain situation.
+			hs.isSetup = true
+			hs.state = First
 
 		} else if !doNav(key, &hs.state) {
 
@@ -502,8 +521,24 @@ func (hs *Handset) StateMachine(key Key) string {
 			}
 		}
 
+	case UtilityMenu:
+
+		if key == EscKey {
+			hs.state = First
+		}
+
+	case ObjectsMenu:
+
+
+		if key == EscKey {
+			hs.state = First
+		}
+
 	case Last:
-		doNav(key, &hs.state)
+
+		if key == EscKey {
+			hs.state = First
+		}
 
 	}
 
@@ -513,7 +548,15 @@ func (hs *Handset) StateMachine(key Key) string {
 	//
 	switch hs.state {
 	case First:
-		hs.dspOut = "Version\n" + Version
+
+		hs.dspOut = "1 Setup\n" +
+			"2 Utility\n" +
+			"3 Objects\n" +
+			"\n"
+
+		if !hs.isSetup {
+			hs.dspOut = hs.dspOut + ">Not Setup<"
+		}
 
 	case ShowVersion:
 		hs.dspOut = "Version\n" + Version
@@ -539,8 +582,14 @@ func (hs *Handset) StateMachine(key Key) string {
 	case SetElevation:
 		hs.dspOut = "Set\nElevation\n+DDDD\n-----------\n" + hs.locationElevationStr
 
+	case UtilityMenu:
+		hs.dspOut = "Utility\nMenu\n\nTODO\n" 
+
+	case ObjectsMenu:
+		hs.dspOut = "Objects\nMenu\n\nTODO\n" 
+
 	case Last:
-		hs.dspOut = "Press Esc\nto go back"
+		hs.dspOut = ">>END<<"
 
 	default:
 		hs.dspOut = "Bad State\n"
