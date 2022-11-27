@@ -12,9 +12,9 @@ type MsgType string
 type LogLevel string
 
 const (
-	Foo MsgType = "Foo"
-	Log MsgType = "Log"
-	Hid MsgType = "Hid"
+	Foo     MsgType = "Foo"
+	Log     MsgType = "Log"
+	Handset MsgType = "Handset"
 )
 
 const (
@@ -35,13 +35,13 @@ type LogMsg struct {
 	Source string
 	Body   string
 }
-type HidMsg struct {
-	Kind   MsgType
-	Key   string
+type HandsetMsg struct {
+	Kind MsgType
+	Keys  []string
 }
 
 type MsgInterface interface {
-	FooMsg | LogMsg | HidMsg
+	FooMsg | LogMsg | HandsetMsg
 }
 
 type UART interface {
@@ -55,17 +55,17 @@ type UART interface {
 type MsgBroker struct {
 	logLevel LogLevel
 
-	uartUp   UART
+	uartUp      UART
 	uartUpTxPin machine.Pin
 	uartUpRxPin machine.Pin
 
-	uartDn   UART
+	uartDn      UART
 	uartDnTxPin machine.Pin
 	uartDnRxPin machine.Pin
 
-	fooCh    chan FooMsg
-	logCh    chan LogMsg
-	hidCh    chan HidMsg
+	fooCh     chan FooMsg
+	logCh     chan LogMsg
+	handsetCh chan HandsetMsg
 }
 
 func NewBroker(
@@ -92,7 +92,7 @@ func NewBroker(
 
 		fooCh: nil,
 		logCh: nil,
-		hidCh: nil,
+		handsetCh: nil,
 	}, nil
 
 }
@@ -113,8 +113,8 @@ func (mb *MsgBroker) Configure() {
 func (mb *MsgBroker) SetFooCh(c chan FooMsg) {
 	mb.fooCh = c
 }
-func (mb *MsgBroker) SetHidCh(c chan HidMsg) {
-	mb.hidCh = c
+func (mb *MsgBroker) SetHandsetCh(c chan HandsetMsg) {
+	mb.handsetCh = c
 }
 func (mb *MsgBroker) SetLogCh(c chan LogMsg) {
 	mb.logCh = c
@@ -153,7 +153,7 @@ func (mb *MsgBroker) SubscriptionReader() {
 					continue
 				}
 
-				// the "~" character it the end of a message
+				// the "~" character is the end of a message
 				data, _ := mb.uartUp.ReadByte()
 
 				if data == 126 {
@@ -190,11 +190,11 @@ func (mb *MsgBroker) DispatchMessage(msgParts []string) {
 		if mb.logCh != nil {
 			mb.logCh <- *msg
 		}
-	case string(Hid):
-		fmt.Println("[DispatchMessage] - Hid")
-		msg := unmarshallHid(msgParts)
-		if mb.hidCh != nil {
-			mb.hidCh <- *msg
+	case string(Handset):
+		fmt.Println("[DispatchMessage] - Handset")
+		msg := unmarshallHandset(msgParts)
+		if mb.handsetCh != nil {
+			mb.handsetCh <- *msg
 		}
 	default:
 		fmt.Println("[DispatchMessage] - default")
@@ -255,79 +255,82 @@ func (mb *MsgBroker) PublishLog(log LogMsg) {
 	mb.PublishMsg(msgStr)
 
 }
-func (mb *MsgBroker) PublishHid(hid HidMsg) {
+func (mb *MsgBroker) PublishHandset(handsetMsg HandsetMsg) {
 
-	msgStr := "^" + string(hid.Kind)
-	msgStr = msgStr + "|" + string(hid.Key) + "~"
+	msgStr := "^" + string(handsetMsg.Kind)
+
+	for _, key := range handsetMsg.Keys {
+		msgStr = msgStr + "|" + key
+	}
+	msgStr = msgStr + "~"
 
 	mb.PublishMsg(msgStr)
 
 }
 
-func (mb *MsgBroker) PublishMsg(msg string){
+func (mb *MsgBroker) PublishMsg(msg string) {
 
 	if mb.uartUp != nil {
 		mb.uartUp.Write([]byte(msg))
 	}
-	
+
 	if mb.uartDn != nil {
 		mb.uartDn.Write([]byte(msg))
 	}
 }
 
-
 func unmarshallFoo(msgParts []string) *FooMsg {
 
-	msg := new(FooMsg)
+	fooMsg := new(FooMsg)
 
 	if len(msgParts) > 0 {
-		msg.Kind = Foo
+		fooMsg.Kind = Foo
 	}
 	if len(msgParts) > 1 {
-		msg.Name = msgParts[1]
+		fooMsg.Name = msgParts[1]
 	}
 
-	return msg
+	return fooMsg
 }
 
 func unmarshallLog(msgParts []string) *LogMsg {
 
-	msg := new(LogMsg)
+	logMsg := new(LogMsg)
 
 	if len(msgParts) > 0 {
-		msg.Kind = Log
+		logMsg.Kind = Log
 	}
 	if len(msgParts) > 1 {
-		msg.Level = LogLevel(msgParts[1])
+		logMsg.Level = LogLevel(msgParts[1])
 	}
 	if len(msgParts) > 2 {
-		msg.Source = msgParts[2]
+		logMsg.Source = msgParts[2]
 	}
 	if len(msgParts) > 3 {
-		msg.Body = msgParts[3]
+		logMsg.Body = msgParts[3]
 	}
 
-	return msg
+	return logMsg
 }
 
-func unmarshallHid(msgParts []string) *HidMsg {
+func unmarshallHandset(msgParts []string) *HandsetMsg {
 
-	msg := new(HidMsg)
+	handsetMsg := new(HandsetMsg)
 
 	if len(msgParts) > 0 {
-		msg.Kind = Hid
+		handsetMsg.Kind = Handset
 	}
 	if len(msgParts) > 1 {
-		msg.Key = msgParts[1]
+		handsetMsg.Keys = msgParts[1:]
 	}
 
-	return msg
+	return handsetMsg
 }
 
-func  (mb *MsgBroker) InfoLog(src string, body string){
-	mb.PublishLog(makeLogMsg(Info,src,body))
+func (mb *MsgBroker) InfoLog(src string, body string) {
+	mb.PublishLog(makeLogMsg(Info, src, body))
 }
-func  makeLogMsg(level LogLevel, src string, body string) LogMsg{
+func makeLogMsg(level LogLevel, src string, body string) LogMsg {
 
 	var logMsg LogMsg
 	logMsg.Kind = Log

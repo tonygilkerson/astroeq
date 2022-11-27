@@ -101,13 +101,13 @@ func main() {
 	// Create subscription channels
 	//
 	fooCh := make(chan msg.FooMsg)
-	hidCh := make(chan msg.HidMsg)
+	handsetCh := make(chan msg.HandsetMsg)
 
 	//
 	// Register the channels with the broker
 	//
 	mb.SetFooCh(fooCh)
-	mb.SetHidCh(hidCh)
+	mb.SetHandsetCh(handsetCh)
 
 	//
 	// Start the subscription reader, it will read from the the UARTS
@@ -230,12 +230,12 @@ func main() {
 	// Start the message consumers
 	//
 	go fooConsumer(fooCh, mb)
-	go hidConsumer(&handset, &display, hidCh, &mb)
+	go handsetConsumer(&handset, &display, handsetCh, &mb)
 
 	//
 	// Keep main live
 	for {
-		time.Sleep(time.Millisecond * 10000)
+		time.Sleep(time.Millisecond * 5000)
 		fmt.Println("Handset.main heart beat...")
 	}
 
@@ -264,15 +264,19 @@ func fooConsumer(c chan msg.FooMsg, mb msg.MsgBroker) {
 	}
 }
 
-func hidConsumer(handset *hid.Handset, display *ssd1351.Device, c chan msg.HidMsg, mb *msg.MsgBroker) {
+func handsetConsumer(handset *hid.Handset, display *ssd1351.Device, c chan msg.HandsetMsg, mb *msg.MsgBroker) {
 	red := color.RGBA{0, 0, 255, 255}
 
 	for m := range c {
-		fmt.Printf("[handset.hidConsumer] - Kind: [%s], Key: [%s]\n", m.Kind, m.Key)
+		fmt.Printf("[handset.handsetConsumer] - Kind: [%s], Key: [%v]\n", m.Kind, m.Keys)
 		display.FillScreen(color.RGBA{0, 0, 0, 0})
+		var out string
+
 		
-		key := handset.GetKeyFromString(m.Key)
-		out := handset.StateMachine(key)
+		for _, k := range m.Keys {
+			key := handset.GetKeyFromString(k)
+			out = handset.StateMachine(key)
+		} 
 		tinyfont.WriteLine(display, &freemono.Regular9pt7b, 3, 15, out, red)
 
 		mb.InfoLog("Handset", out)
