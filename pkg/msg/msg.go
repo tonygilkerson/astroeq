@@ -14,6 +14,7 @@ type LogLevel string
 const (
 	Foo MsgType = "Foo"
 	Log MsgType = "Log"
+	Hid MsgType = "Hid"
 )
 
 const (
@@ -34,9 +35,13 @@ type LogMsg struct {
 	Source string
 	Body   string
 }
+type HidMsg struct {
+	Kind   MsgType
+	Key   string
+}
 
 type MsgInterface interface {
-	FooMsg | LogMsg
+	FooMsg | LogMsg | HidMsg
 }
 
 type UART interface {
@@ -60,6 +65,7 @@ type MsgBroker struct {
 
 	fooCh    chan FooMsg
 	logCh    chan LogMsg
+	hidCh    chan HidMsg
 }
 
 func NewBroker(
@@ -86,6 +92,7 @@ func NewBroker(
 
 		fooCh: nil,
 		logCh: nil,
+		hidCh: nil,
 	}, nil
 
 }
@@ -105,6 +112,9 @@ func (mb *MsgBroker) Configure() {
 
 func (mb *MsgBroker) SetFooCh(c chan FooMsg) {
 	mb.fooCh = c
+}
+func (mb *MsgBroker) SetHidCh(c chan HidMsg) {
+	mb.hidCh = c
 }
 func (mb *MsgBroker) SetLogCh(c chan LogMsg) {
 	mb.logCh = c
@@ -167,6 +177,7 @@ func (mb *MsgBroker) SubscriptionReader() {
 func (mb *MsgBroker) DispatchMessage(msgParts []string) {
 
 	switch msgParts[0] {
+
 	case string(Foo):
 		fmt.Println("[DispatchMessage] - Foo")
 		msg := unmarshallFoo(msgParts)
@@ -178,6 +189,12 @@ func (mb *MsgBroker) DispatchMessage(msgParts []string) {
 		msg := unmarshallLog(msgParts)
 		if mb.logCh != nil {
 			mb.logCh <- *msg
+		}
+	case string(Hid):
+		fmt.Println("[DispatchMessage] - Hid")
+		msg := unmarshallHid(msgParts)
+		if mb.hidCh != nil {
+			mb.hidCh <- *msg
 		}
 	default:
 		fmt.Println("[DispatchMessage] - default")
@@ -238,6 +255,14 @@ func (mb *MsgBroker) PublishLog(log LogMsg) {
 	mb.PublishMsg(msgStr)
 
 }
+func (mb *MsgBroker) PublishHid(hid HidMsg) {
+
+	msgStr := "^" + string(hid.Kind)
+	msgStr = msgStr + "|" + string(hid.Key) + "~"
+
+	mb.PublishMsg(msgStr)
+
+}
 
 func (mb *MsgBroker) PublishMsg(msg string){
 
@@ -280,6 +305,20 @@ func unmarshallLog(msgParts []string) *LogMsg {
 	}
 	if len(msgParts) > 3 {
 		msg.Body = msgParts[3]
+	}
+
+	return msg
+}
+
+func unmarshallHid(msgParts []string) *HidMsg {
+
+	msg := new(HidMsg)
+
+	if len(msgParts) > 0 {
+		msg.Kind = Hid
+	}
+	if len(msgParts) > 1 {
+		msg.Key = msgParts[1]
 	}
 
 	return msg

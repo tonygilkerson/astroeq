@@ -2,8 +2,8 @@ package hid
 
 import (
 	"machine"
-	"time"
 	"strconv"
+	"time"
 )
 
 const Version string = "v0-alpha4"
@@ -117,7 +117,7 @@ type Handset struct {
 	locationLongitudeStr string
 
 	locationElevationStr string
-	locationElevation int16
+	locationElevation    int16
 }
 
 // Returns a new Handset
@@ -248,9 +248,9 @@ func (hs *Handset) publishKeys() {
 
 }
 
-func (hs *Handset) GetKeyName(k Key) string {
+func (hs *Handset) GetKeyString(k Key) string {
 
-	// fmt.Printf("[GetKeyName] value: %v \n", k)
+	// fmt.Printf("[GetKeyString] value: %v \n", k)
 	switch k {
 	case ZeroKey:
 		return "0"
@@ -291,7 +291,52 @@ func (hs *Handset) GetKeyName(k Key) string {
 	case EnterKey:
 		return "Enter"
 	default:
-		return "Unknown"
+		return "Undefined"
+	}
+}
+
+func (hs *Handset) GetKeyFromString(s string) Key {
+	switch s {
+	case "0":
+		return ZeroKey
+	case "1":
+		return OneKey
+	case "2":
+		return TwoKey
+	case "3":
+		return ThreeKey
+	case "4":
+		return FourKey
+	case "5":
+		return FiveKey
+	case "6":
+		return SixKey
+	case "7":
+		return SevenKey
+	case "8":
+		return EightKey
+	case "9":
+		return NineKey
+	case "ScrollDn":
+		return ScrollDnKey
+	case "ScrollUp":
+		return ScrollUpKey
+	case "Right":
+		return RightKey
+	case "Left":
+		return LeftKey
+	case "Up":
+		return UpKey
+	case "Down":
+		return DownKey
+	case "ESC":
+		return EscKey
+	case "Setup":
+		return SetupKey
+	case "Enter":
+		return EnterKey
+	default:
+		return UndefinedKey
 	}
 }
 
@@ -324,13 +369,13 @@ func (hs *Handset) StateMachine(key Key) string {
 				hs.currentDateStr = hs.currentDateStr[:len(hs.currentDateStr)-1]
 
 			} else if len(hs.currentDateStr) == 4 && keyIsDigit(key) {
-				hs.currentDateStr = hs.currentDateStr + "-" + hs.GetKeyName(key)
+				hs.currentDateStr = hs.currentDateStr + "-" + hs.GetKeyString(key)
 
 			} else if len(hs.currentDateStr) == 7 && keyIsDigit(key) {
-				hs.currentDateStr = hs.currentDateStr + "-" + hs.GetKeyName(key)
+				hs.currentDateStr = hs.currentDateStr + "-" + hs.GetKeyString(key)
 
 			} else if len(hs.currentDateStr) < 10 && keyIsDigit(key) {
-				hs.currentDateStr = hs.currentDateStr + hs.GetKeyName(key)
+				hs.currentDateStr = hs.currentDateStr + hs.GetKeyString(key)
 
 			}
 		}
@@ -359,13 +404,13 @@ func (hs *Handset) StateMachine(key Key) string {
 				hs.currentTimeStr = hs.currentTimeStr[:len(hs.currentTimeStr)-1]
 
 			} else if len(hs.currentTimeStr) == 2 && keyIsDigit(key) {
-				hs.currentTimeStr = hs.currentTimeStr + ":" + hs.GetKeyName(key)
+				hs.currentTimeStr = hs.currentTimeStr + ":" + hs.GetKeyString(key)
 
 			} else if len(hs.currentTimeStr) == 5 && keyIsDigit(key) {
-				hs.currentTimeStr = hs.currentTimeStr + ":" + hs.GetKeyName(key)
+				hs.currentTimeStr = hs.currentTimeStr + ":" + hs.GetKeyString(key)
 
 			} else if len(hs.currentTimeStr) == 8 {
-				
+
 				if key == ScrollDnKey {
 					hs.currentTimeStr = hs.currentTimeStr + "-"
 				} else if key == ScrollUpKey {
@@ -373,7 +418,7 @@ func (hs *Handset) StateMachine(key Key) string {
 				}
 
 			} else if len(hs.currentTimeStr) < 11 && keyIsDigit(key) {
-				hs.currentTimeStr = hs.currentTimeStr + hs.GetKeyName(key)
+				hs.currentTimeStr = hs.currentTimeStr + hs.GetKeyString(key)
 
 			}
 		}
@@ -391,10 +436,10 @@ func (hs *Handset) StateMachine(key Key) string {
 				hs.locationLatitudeStr = hs.locationLatitudeStr[:len(hs.locationLatitudeStr)-1]
 
 			} else if len(hs.locationLatitudeStr) == 3 && keyIsDigit(key) {
-				hs.locationLatitudeStr = hs.locationLatitudeStr + "." + hs.GetKeyName(key)
+				hs.locationLatitudeStr = hs.locationLatitudeStr + "." + hs.GetKeyString(key)
 
-			} else if len(hs.locationLatitudeStr) == 0  {
-				
+			} else if len(hs.locationLatitudeStr) == 0 {
+
 				if key == ScrollDnKey {
 					hs.locationLatitudeStr = "-"
 				} else if key == ScrollUpKey {
@@ -402,7 +447,7 @@ func (hs *Handset) StateMachine(key Key) string {
 				}
 
 			} else if len(hs.locationLatitudeStr) < 8 && keyIsDigit(key) {
-				hs.locationLatitudeStr = hs.locationLatitudeStr + hs.GetKeyName(key)
+				hs.locationLatitudeStr = hs.locationLatitudeStr + hs.GetKeyString(key)
 
 			}
 		}
@@ -415,10 +460,10 @@ func (hs *Handset) StateMachine(key Key) string {
 				hs.locationLongitudeStr = hs.locationLongitudeStr[:len(hs.locationLongitudeStr)-1]
 
 			} else if len(hs.locationLongitudeStr) == 3 && keyIsDigit(key) {
-				hs.locationLongitudeStr = hs.locationLongitudeStr + "." + hs.GetKeyName(key)
+				hs.locationLongitudeStr = hs.locationLongitudeStr + "." + hs.GetKeyString(key)
 
-			} else if len(hs.locationLongitudeStr) == 0  {
-				
+			} else if len(hs.locationLongitudeStr) == 0 {
+
 				if key == ScrollDnKey {
 					hs.locationLongitudeStr = "-"
 				} else if key == ScrollUpKey {
@@ -426,7 +471,7 @@ func (hs *Handset) StateMachine(key Key) string {
 				}
 
 			} else if len(hs.locationLongitudeStr) < 8 && keyIsDigit(key) {
-				hs.locationLongitudeStr = hs.locationLongitudeStr + hs.GetKeyName(key)
+				hs.locationLongitudeStr = hs.locationLongitudeStr + hs.GetKeyString(key)
 
 			}
 		}
@@ -443,8 +488,8 @@ func (hs *Handset) StateMachine(key Key) string {
 			if key == LeftKey && len(hs.locationElevationStr) > 0 {
 				hs.locationElevationStr = hs.locationElevationStr[:len(hs.locationElevationStr)-1]
 
-			} else if len(hs.locationElevationStr) == 0  {
-				
+			} else if len(hs.locationElevationStr) == 0 {
+
 				if key == ScrollDnKey {
 					hs.locationElevationStr = "-"
 				} else if key == ScrollUpKey {
@@ -452,7 +497,7 @@ func (hs *Handset) StateMachine(key Key) string {
 				}
 
 			} else if len(hs.locationElevationStr) < 5 && keyIsDigit(key) {
-				hs.locationElevationStr = hs.locationElevationStr + hs.GetKeyName(key)
+				hs.locationElevationStr = hs.locationElevationStr + hs.GetKeyString(key)
 
 			}
 		}

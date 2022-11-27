@@ -53,7 +53,6 @@ import (
 												https://www.waveshare.com/product/displays/oled/pico-oled-2.23.htm
 */
 
-
 func main() {
 
 	// run light
@@ -69,7 +68,7 @@ func main() {
 		TX: machine.UART0_TX_PIN,
 		RX: machine.UART0_RX_PIN,
 	})
-	
+
 	var uartUp msg.UART
 	var uartUpTxPin machine.Pin
 	var uartUpRxPin machine.Pin
@@ -92,27 +91,23 @@ func main() {
 		uartDnRxPin,
 	)
 
-  
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	mb.Configure()
-	
+
 	//
 	// Create subscription channels
 	//
 	fooCh := make(chan msg.FooMsg)
+	hidCh := make(chan msg.HidMsg)
 
 	//
 	// Register the channels with the broker
 	//
 	mb.SetFooCh(fooCh)
-
-	//
-	// Start the message consumers
-	//
-	go fooConsumer(fooCh, mb)
+	mb.SetHidCh(hidCh)
 
 	//
 	// Start the subscription reader, it will read from the the UARTS
@@ -123,7 +118,7 @@ func main() {
 	// Display
 	/////////////////////////////////////////////////////////////////////////////
 	machine.SPI0.Configure(machine.SPIConfig{
-		Frequency: 2000000,
+		Frequency: 5_760_000,
 		LSBFirst:  false,
 		Mode:      0,
 		DataBits:  8,
@@ -137,7 +132,7 @@ func main() {
 	cs := machine.Pin(27)
 	var en machine.Pin // ran out of pins
 	var rw machine.Pin // ran out of pins
-	
+
 	// HACK - I ran out of pins and so I used GP16 for rst, en and rw
 	//        I am not sure what this does in the ssd1351 driver but the
 	//        display functions that I need are working for now but this
@@ -145,7 +140,7 @@ func main() {
 	rst = machine.GP16
 	en = machine.GP16
 	rw = machine.GP16
-	
+
 	display := ssd1351.New(machine.SPI0, rst, dc, cs, en, rw)
 	display.Configure(ssd1351.Config{
 		Width:        128,
@@ -175,7 +170,6 @@ func main() {
 
 	// tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 115, "Test 0004", red)
 	// display.FillRectangle(3, 70, 123, 1, red)
-
 
 	/////////////////////////////////////////////////////////////////////////////
 	// keypad keys
@@ -228,7 +222,22 @@ func main() {
 
 	keyStrokesCh := handset.Configure()
 
-	goHandsetStateMachine(handset, display, keyStrokesCh, mb)
+	//
+	// Start the local key consumer
+	go handsetStateMachine(&handset, &display, keyStrokesCh, &mb)
+
+	//
+	// Start the message consumers
+	//
+	go fooConsumer(fooCh, mb)
+	go hidConsumer(&handset, &display, hidCh, &mb)
+
+	//
+	// Keep main live
+	for {
+		time.Sleep(time.Millisecond * 10000)
+		fmt.Println("Handset.main heart beat...")
+	}
 
 }
 
@@ -255,22 +264,37 @@ func fooConsumer(c chan msg.FooMsg, mb msg.MsgBroker) {
 	}
 }
 
+func hidConsumer(handset *hid.Handset, display *ssd1351.Device, c chan msg.HidMsg, mb *msg.MsgBroker) {
+	red := color.RGBA{0, 0, 255, 255}
 
-func goHandsetStateMachine(handset hid.Handset, display ssd1351.Device, keyStrokesCh chan hid.Key, mb msg.MsgBroker){
+	for m := range c {
+		fmt.Printf("[handset.hidConsumer] - Kind: [%s], Key: [%s]\n", m.Kind, m.Key)
+		display.FillScreen(color.RGBA{0, 0, 0, 0})
+		
+		key := handset.GetKeyFromString(m.Key)
+		out := handset.StateMachine(key)
+		tinyfont.WriteLine(display, &freemono.Regular9pt7b, 3, 15, out, red)
+
+		mb.InfoLog("Handset", out)
+
+	}
+}
+
+func handsetStateMachine(handset *hid.Handset, display *ssd1351.Device, keyStrokesCh chan hid.Key, mb *msg.MsgBroker) {
 
 	red := color.RGBA{0, 0, 255, 255}
 	var noKey hid.Key
-	
+
 	out := handset.StateMachine(noKey)
-	tinyfont.WriteLine(&display, &freemono.Regular9pt7b, 3, 15, out, red)
+	tinyfont.WriteLine(display, &freemono.Regular9pt7b, 3, 15, out, red)
 
 	for k := range keyStrokesCh {
 		display.FillScreen(color.RGBA{0, 0, 0, 0})
 
 		out := handset.StateMachine(k)
-		tinyfont.WriteLine(&display, &freemono.Regular9pt7b, 3, 15, out, red)
-		
-		mb.InfoLog("Handset",out)
+		tinyfont.WriteLine(display, &freemono.Regular9pt7b, 3, 15, out, red)
+
+		mb.InfoLog("Handset", out)
 
 	}
 
