@@ -2,11 +2,13 @@
 package driver
 
 import (
-	"github.com/tonygilkerson/astroeq/pkg/encoder"
 	"errors"
+	"fmt"
 	"machine"
 	"math"
 	"time"
+
+	"github.com/tonygilkerson/astroeq/pkg/encoder"
 )
 
 // Microstep settings
@@ -205,26 +207,32 @@ func (ra *RADriver) setMicroStepSetting(ms int32) {
 		ra.microStep1.Low()
 		ra.microStep2.Low()
 		ra.microStep3.Low()
+		fmt.Println("[setMicroStepSetting] microStepSetting 1-L L L")
 	case 2:
 		ra.microStep1.High()
 		ra.microStep2.Low()
 		ra.microStep3.Low()
+		fmt.Println("[setMicroStepSetting] microStepSetting 2-H L L")
 	case 4:
 		ra.microStep1.Low()
 		ra.microStep2.High()
 		ra.microStep3.Low()
+		fmt.Println("[setMicroStepSetting] microStepSetting 4-L H L")
 	case 8:
 		ra.microStep1.High()
 		ra.microStep2.High()
-		ra.microStep3.High()
+		ra.microStep3.Low()
+		fmt.Println("[setMicroStepSetting] microStepSetting 8-H H L")
 	case 16:
 		ra.microStep1.High()
 		ra.microStep2.High()
 		ra.microStep3.High()
+		fmt.Println("[setMicroStepSetting] microStepSetting 16-H H H")
 	default:
 		ra.microStep1.High()
 		ra.microStep2.High()
 		ra.microStep3.High()
+		fmt.Println("[setMicroStepSetting] microStepSetting default-H H H")
 	}
 
 }
@@ -244,9 +252,14 @@ func (ra *RADriver) setMicroStepSetting(ms int32) {
 //	 The cycle perod = 1e9 / Hz
 func (ra *RADriver) RunAtSiderealRate() {
 
+	// set to 16 micro steps
+	// ra.setMicroStepSetting(16)
+
+	// systemRatio := ra.stepsPerRevolution * ra.maxMicroStepSetting * ra.wormRatio * ra.gearRatio
 	systemRatio := ra.stepsPerRevolution * ra.maxMicroStepSetting * ra.wormRatio * ra.gearRatio
 	sideralHz := float64(systemRatio) / siderealDayInSeconds
 	period := uint64(math.Round(1e9 / sideralHz))
+
 
 	// Save Hz on RA Driver
 	ra.runningHz = int32(sideralHz)

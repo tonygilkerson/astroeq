@@ -141,9 +141,9 @@ func fooConsumer(fooCh chan msg.FooMsg, mb msg.MsgBroker, consoleCh chan string)
 func logConsumer(logCh chan msg.LogMsg, mb msg.MsgBroker, consoleCh chan string) {
 
 	for msg := range logCh {
-		s := fmt.Sprintf("%s: %s %s", msg.Kind, msg.Source, msg.Level)
+		s := fmt.Sprintf("%s: %s %s\n\n", msg.Kind, msg.Source, msg.Level)
+		s = s + msg.Body
 		consoleCh <- s
-		consoleCh <- msg.Body
 	}
 }
 
