@@ -191,6 +191,10 @@ func (ra *RADriver) Configure() {
 
 }
 
+func (ra *RADriver) ZeroRA() {
+	ra.encoder.ZeroRA()
+}
+
 func (ra *RADriver) setMicroStepSetting(ms int32) {
 
 	ra.microStepSetting = ms
@@ -248,28 +252,21 @@ func (ra *RADriver) setMicroStepSetting(ms int32) {
 //	                     ============
 //			    								2_764_800 (system ratio 400*16*144*3)
 //
-//	 The cycle Hz = system ration / number of seconds in a sideral day
+//	 The cycle Hz = system ratio / number of seconds in a sideral day
 //	 The cycle perod = 1e9 / Hz
 func (ra *RADriver) RunAtSiderealRate() {
-
-	// set to 16 micro steps
-	// ra.setMicroStepSetting(16)
 
 	// systemRatio := ra.stepsPerRevolution * ra.maxMicroStepSetting * ra.wormRatio * ra.gearRatio
 	systemRatio := ra.stepsPerRevolution * ra.maxMicroStepSetting * ra.wormRatio * ra.gearRatio
 	sideralHz := float64(systemRatio) / siderealDayInSeconds
-	period := uint64(math.Round(1e9 / sideralHz))
 
+	ra.RunAtHz(sideralHz)
 
-	// Save Hz on RA Driver
-	ra.runningHz = int32(sideralHz)
-
-	// Set period for hardware PWM
-	ra.pwm.SetPeriod(period)
 }
 
 func (ra *RADriver) RunAtHz(hz float64) {
-	print("[RunAtHz] Set hz to: ", hz, "\n")
+
+	fmt.Printf("[RunAtHz] Set hz to: %.2f\n", hz)
 	period := uint64(math.Round(1e9 / hz))
 
 	// Save Hz on RA Driver
@@ -288,7 +285,7 @@ func (ra *RADriver) monitorPosition() {
 		} else {
 			println("Error getting position")
 		}
-		time.Sleep(time.Millisecond * 700) //DEVTODO - not sure if this is too short or too long?
+		time.Sleep(time.Millisecond * 450) //DEVTODO - not sure if this is too short or too long?
 	}
 }
 

@@ -4,6 +4,7 @@ package encoder
 
 import (
 	"errors"
+	"fmt"
 	"machine"
 	"math"
 	"time"
@@ -52,12 +53,19 @@ func (ra *RAEncoder) Configure() {
 // Zero the RA encoder
 func (ra *RAEncoder) ZeroRA() {
 
+	fmt.Println("[ZeroRA] - Set RA to position zero!")
 	ra.WriteRead(AMT22_NOP, AMT22_ZERO)
+	
 	ra.raPosition = 0
+	ra.previousEncoderReading = 0
+	ra.rotationCount = 0
 
 	// allow time to reset
 	time.Sleep(time.Millisecond * 240)
 
+	p, e := ra.GetPositionRA()
+	fmt.Printf("[ZeroRA] - Check to see if it works, current position is: %v or error: %v", p, e)
+	
 }
 
 func (ra *RAEncoder) GetPositionRA() (position uint32, err error) {
@@ -117,8 +125,6 @@ func (ra *RAEncoder) GetPositionRA() (position uint32, err error) {
 
 func (ra *RAEncoder) WriteRead(b1 byte, b2 byte) (r1, r2 byte) {
 
-	// DEVTODO add mutex so that only one go routine can talk on a channel at a time
-	//         we dont want to clash with the display which is shareing the SPI buss
 
 	// Select RA channel
 	ra.cs.Low()
