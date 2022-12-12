@@ -4,104 +4,85 @@ import (
 	"fmt"
 
 	"github.com/tonygilkerson/astroeq/pkg/driver"
+	"github.com/tonygilkerson/astroeq/pkg/msg"
 
 	"machine"
 	"time"
 	"math"
 )
-
-/*
-
-  OLED                                            Pico                               ssd1351 parms           AMT223B-V       CAT5
-  ----------------------------------------------  ---------------------------------  ----------------------  --------------- -------
-                                                  machine.SPI0                       bus
-  VCC                                             VBUS 5v                                                    Pin1 VCC  RED   1 ORN-s
-  GND                                             GND                                                        Pin4 GND  BLK   3 BLU
-  DIN  BLU - data in                              GP19, SPI0_SDO_PIN                                         Pin3 MOSI ORN   5 ORN
-                                                  GP16, SPI0_SDI_PIN                                         Pin5 MISO GRN   2 GRN
-  CLK  YLW  - clock data in                       GP18, SPI0_SCK_PIN                                         Pin2 SCLK BRN   4 BRN
-  CS   ORN - Chip select                          GP17                                csPin
-  DC   GRN - Data/Cmd select (high=data,low=cmd)  GP22 (any open pin)                 dcPin
-  RST  WHT  - Reset (low=active)                  GP26 (any open pin)                 resetPin
-                                                  GP27 (any open pin)                 enPin
-                                                  GP28 (any open pin)                 rwPin
-                                                  GP20                                                       Pin6 CS   YLW   6 GRN-s
-
-
-  Motor Driver (A4988)                                                                NIMA17 Stepper motor
-  ----------------------------------------------                                      ---------------------
-  pin01 GND                                       GND
-  pin02 VDD                                       5v                                                         Pin1 5v
-  pin03 1B                                                                            Motor 1B (color?)
-  pin04 1A                                                                            Motor 1A (color?)
-  pin05 2A                                                                            Motor 2A (color?)
-  pin06 2B                                                                            Moror 2B (color?)
-  pin07 GND                                       GND
-  pin08 VMOT (7.2v power supply)
-  ----
-  pin09 ENABLE
-  pin10 MS1                                       GP12
-  pin11 MS2                                       GP11
-  pin12 MS3                                       GP10
-  pin13 RESET (connect to SLEEP)
-  pin14 SLEEP (connect to RESET)
-  PIN15 STEP                                      GP9
-  PIN16 DIR                                       GP8
-
-
-
-	Pico
-	-------------------
-	GP0
-	GP1
-	
-	GP2
-	GP3
-	GP4
-	GP5
-	
-	GP6
-	GP7
-	GP8
-	GP9
-
-	GP10
-	GP11
-	GP12
-	GP13
-
-	GP14
-	GP15
-	
-	----
-
-	VBUS
-	VSS
-	
-	3v3
-	3v3(out)
-	ADC_VREF
-	GP28
-
-	GP27
-	GP26
-	RUN
-	GP22
-
-	GP21
-	GP20
-	GP19
-	GP18
-
-	GP17
-	GP16
-
-*/
+// See wire.md for wiring details and pin assignments
 
 func main() {
 
 	// run light
 	runLight()
+
+	/////////////////////////////////////////////////////////////////////////////
+	// Broker
+	/////////////////////////////////////////////////////////////////////////////
+
+	fmt.Println("Create new broker")
+
+	machine.UART0.Configure(machine.UARTConfig{
+		TX: machine.UART0_TX_PIN,
+		RX: machine.UART0_RX_PIN,
+	})
+
+	var uartUp msg.UART
+	var uartUpTxPin machine.Pin
+	var uartUpRxPin machine.Pin
+
+	var uartDn msg.UART
+	var uartDnTxPin machine.Pin
+	var uartDnRxPin machine.Pin
+
+	uartUp = machine.UART0
+	uartUpTxPin = machine.UART0_TX_PIN
+	uartUpRxPin = machine.UART0_RX_PIN
+
+	// Note if UART1 was use it would be used here, however
+	// For now the RA-Driver is not using UART1, 
+	// I might make the RA-Driver the end of the conga line and so UART1 would not be needed
+
+	mb, err := msg.NewBroker(
+		uartUp,
+		uartUpTxPin,
+		uartUpRxPin,
+		uartDn,
+		uartDnTxPin,
+		uartDnRxPin,
+	)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	mb.Configure()
+
+	//
+	//
+	// Create subscription channels and 
+	// Register the them with the broker
+	//
+	fooCh := make(chan msg.FooMsg)
+	mb.SetFooCh(fooCh)
+
+	raDriverCh := make(chan msg.RADriverMsg)
+	mb.SetRADriverCh(raDriverCh)
+	//
+	// Start the subscription reader, it will read from the the UARTS
+	//
+	go mb.SubscriptionReader()
+
+	//
+	// Start the message consumers
+	//
+	go fooConsumer(fooCh, mb)
+	go raDriverConsumer(raDriverCh, mb)
+
+	/////////////////////////////////////////////////////////////////////////////
+	// RA-Drive
+	/////////////////////////////////////////////////////////////////////////////
 
 	//
 	// Configure SPI bus
@@ -191,6 +172,9 @@ func main() {
 			// if position >= 7_077_888 {
 			// 	break
 			// }
+
+			//Test to the UART
+			uartUp.Write([]byte("."))
 		}
 
 		fmt.Println("[main] Reset RA and track by min...")
@@ -213,9 +197,7 @@ func main() {
 		}
 
 
-
-
-		// Done
+	// Done
 	println("[main] Done!")
 	
 }
@@ -235,3 +217,20 @@ func runLight() {
 	}
 	led.High()
 }
+
+func fooConsumer(ch chan msg.FooMsg, mb msg.MsgBroker) {
+
+	for foo := range ch {
+		fmt.Printf("[ra-driver.fooConsumer] - Kind: [%s], Name: [%s]\n", foo.Kind, foo.Name)
+	}
+}
+
+func raDriverConsumer(ch chan msg.RADriverMsg, mb msg.MsgBroker) {
+
+	for raDriver := range ch {
+		fmt.Printf("[ra-driver.raDriverConsumer] - Kind: [%s], Cmd: [%s]\n", raDriver.Kind, raDriver.Cmd)
+		//DEVTODO look for command and act on them
+		//        create a new apply() function for this
+	}
+}
+

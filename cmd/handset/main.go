@@ -81,11 +81,13 @@ func main() {
 	uartUpTxPin = machine.UART0_TX_PIN
 	uartUpRxPin = machine.UART0_RX_PIN
 
+	// Note if UART1 was use it would be used here, however
+	// the Handset is at the head of the conga line so no UART1 needed
+
 	mb, err := msg.NewBroker(
 		uartUp,
 		uartUpTxPin,
 		uartUpRxPin,
-		// The Handset is at the head of the conga line so no UART1 needed
 		uartDn,
 		uartDnTxPin,
 		uartDnRxPin,
@@ -98,21 +100,27 @@ func main() {
 	mb.Configure()
 
 	//
-	// Create subscription channels
+	// Create subscription channels and 
+	// Register the them with the broker
 	//
 	fooCh := make(chan msg.FooMsg)
-	handsetCh := make(chan msg.HandsetMsg)
-
-	//
-	// Register the channels with the broker
-	//
 	mb.SetFooCh(fooCh)
+
+	handsetCh := make(chan msg.HandsetMsg)
 	mb.SetHandsetCh(handsetCh)
+
 
 	//
 	// Start the subscription reader, it will read from the the UARTS
 	//
 	go mb.SubscriptionReader()
+
+	//
+	// Start the message consumers
+	//
+	go fooConsumer(fooCh, mb)
+	
+
 
 	/////////////////////////////////////////////////////////////////////////////
 	// Display
@@ -225,11 +233,6 @@ func main() {
 	//
 	// Start the local key consumer
 	go handsetStateMachine(&handset, &display, keyStrokesCh, &mb)
-
-	//
-	// Start the message consumers
-	//
-	go fooConsumer(fooCh, mb)
 	go handsetConsumer(&handset, &display, handsetCh, &mb)
 
 	//
@@ -257,23 +260,23 @@ func runLight() {
 	led.High()
 }
 
-func fooConsumer(c chan msg.FooMsg, mb msg.MsgBroker) {
+func fooConsumer(ch chan msg.FooMsg, mb msg.MsgBroker) {
 
-	for m := range c {
-		fmt.Printf("[handset.fooConsumer] - Kind: [%s], name: [%s]\n", m.Kind, m.Name)
+	for foo := range ch {
+		fmt.Printf("[handset.fooConsumer] - Kind: [%s], name: [%s]\n", foo.Kind, foo.Name)
 	}
 }
 
-func handsetConsumer(handset *hid.Handset, display *ssd1351.Device, c chan msg.HandsetMsg, mb *msg.MsgBroker) {
+func handsetConsumer(handset *hid.Handset, display *ssd1351.Device, ch chan msg.HandsetMsg, mb *msg.MsgBroker) {
 	red := color.RGBA{0, 0, 255, 255}
 
-	for m := range c {
-		fmt.Printf("[handset.handsetConsumer] - Kind: [%s], Key: [%v]\n", m.Kind, m.Keys)
+	for hs := range ch {
+		fmt.Printf("[handset.handsetConsumer] - Kind: [%s], Key: [%v]\n", hs.Kind, hs.Keys)
 		display.FillScreen(color.RGBA{0, 0, 0, 0})
 		var out string
 
 		
-		for _, k := range m.Keys {
+		for _, k := range hs.Keys {
 			key := handset.GetKeyFromString(k)
 			out = handset.StateMachine(key)
 		} 

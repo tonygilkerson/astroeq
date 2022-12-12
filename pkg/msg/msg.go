@@ -10,21 +10,31 @@ import (
 // Define message types
 type MsgType string
 type LogLevel string
+type RADriverCmd string
 
 const (
-	Foo     MsgType = "Foo"
-	Log     MsgType = "Log"
-	Handset MsgType = "Handset"
+	FOO     MsgType = "Foo"
+	LOG     MsgType = "Log"
+	HANDSET MsgType = "Handset"
+	RADRIVER MsgType = "RADriver"
 )
 
 const (
-	Debug LogLevel = "Debug"
-	Info  LogLevel = "Info"
-	Warn  LogLevel = "Warn"
-	Error LogLevel = "Error"
+	DEBUG LogLevel = "Debug"
+	INFO  LogLevel = "Info"
+	WARN  LogLevel = "Warn"
+	ERROR LogLevel = "Error"
 )
 
-// DEVTODO delete foo message eventually
+const (
+	SET_DIR_NORTH RADriverCmd = "SetDirNorth"
+	SET_DIR_SOUTH RADriverCmd = "SetDirSouth"
+)
+
+// Foo message use for testing I will delete it eventually
+// The following is a sample message that can be sent over UART
+//
+//	^Foo|This is a foo message~
 type FooMsg struct {
 	Kind MsgType
 	Name string
@@ -37,11 +47,20 @@ type LogMsg struct {
 }
 type HandsetMsg struct {
 	Kind MsgType
-	Keys  []string
+	Keys []string
+}
+
+// RA Driver message used for sending commands to the RA Driver and for publishing it current status
+// The following are sample messages
+//
+// ^RADriver|SetDirNorth~
+type RADriverMsg struct {
+	Kind MsgType
+	Cmd  RADriverCmd
 }
 
 type MsgInterface interface {
-	FooMsg | LogMsg | HandsetMsg
+	FooMsg | LogMsg | HandsetMsg | RADriverMsg
 }
 
 type UART interface {
@@ -63,9 +82,10 @@ type MsgBroker struct {
 	uartDnTxPin machine.Pin
 	uartDnRxPin machine.Pin
 
-	fooCh     chan FooMsg
-	logCh     chan LogMsg
-	handsetCh chan HandsetMsg
+	fooCh      chan FooMsg
+	logCh      chan LogMsg
+	handsetCh  chan HandsetMsg
+	raDriverCh chan RADriverMsg
 }
 
 func NewBroker(
@@ -80,7 +100,7 @@ func NewBroker(
 ) (MsgBroker, error) {
 
 	return MsgBroker{
-		logLevel: Info, // default
+		logLevel: INFO, // default
 
 		uartUp:      uartUp,
 		uartUpTxPin: uartUpTxPin,
@@ -90,9 +110,10 @@ func NewBroker(
 		uartDnTxPin: uartDnTxPin,
 		uartDnRxPin: uartDnRxPin,
 
-		fooCh: nil,
-		logCh: nil,
+		fooCh:     nil,
+		logCh:     nil,
 		handsetCh: nil,
+		raDriverCh: nil,
 	}, nil
 
 }
@@ -110,14 +131,17 @@ func (mb *MsgBroker) Configure() {
 	}
 }
 
-func (mb *MsgBroker) SetFooCh(c chan FooMsg) {
-	mb.fooCh = c
+func (mb *MsgBroker) SetFooCh(ch chan FooMsg) {
+	mb.fooCh = ch
 }
-func (mb *MsgBroker) SetHandsetCh(c chan HandsetMsg) {
-	mb.handsetCh = c
+func (mb *MsgBroker) SetHandsetCh(ch chan HandsetMsg) {
+	mb.handsetCh = ch
 }
-func (mb *MsgBroker) SetLogCh(c chan LogMsg) {
-	mb.logCh = c
+func (mb *MsgBroker) SetLogCh(ch chan LogMsg) {
+	mb.logCh = ch
+}
+func (mb *MsgBroker) SetRADriverCh(ch chan RADriverMsg) {
+	mb.raDriverCh = ch
 }
 
 // Look for messages that look like this
@@ -178,26 +202,32 @@ func (mb *MsgBroker) DispatchMessage(msgParts []string) {
 
 	switch msgParts[0] {
 
-	case string(Foo):
-		fmt.Println("[DispatchMessage] - Foo")
+	case string(FOO):
+		fmt.Printf("[DispatchMessage] - %v\n",FOO)
 		msg := unmarshallFoo(msgParts)
 		if mb.fooCh != nil {
 			mb.fooCh <- *msg
 		}
-	case string(Log):
-		fmt.Println("[DispatchMessage] - Log")
+	case string(LOG):
+		fmt.Printf("[DispatchMessage] - %v\n",LOG)
 		msg := unmarshallLog(msgParts)
 		if mb.logCh != nil {
 			mb.logCh <- *msg
 		}
-	case string(Handset):
-		fmt.Println("[DispatchMessage] - Handset")
+	case string(HANDSET):
+		fmt.Printf("[DispatchMessage] - %v\n",HANDSET)
 		msg := unmarshallHandset(msgParts)
 		if mb.handsetCh != nil {
 			mb.handsetCh <- *msg
 		}
+	case string(RADRIVER):
+		fmt.Printf("[DispatchMessage] - %v\n",RADRIVER)
+		msg := unmarshallRADriver(msgParts)
+		if mb.raDriverCh != nil {
+			mb.raDriverCh <- *msg
+		}
 	default:
-		fmt.Println("[DispatchMessage] - default")
+		fmt.Println("[DispatchMessage] - no match found")
 	}
 
 }
@@ -209,19 +239,19 @@ func (mb *MsgBroker) SetLogLevel(level LogLevel) {
 func (mb *MsgBroker) isLoggable(level LogLevel) bool {
 
 	switch level {
-	case Debug:
+	case DEBUG:
 		return true
 
-	case Info:
-		if mb.logLevel == Error || mb.logLevel == Warn || mb.logLevel == Info {
+	case INFO:
+		if mb.logLevel == ERROR || mb.logLevel == WARN || mb.logLevel == INFO {
 			return true
 		}
-	case Warn:
-		if mb.logLevel == Error || mb.logLevel == Warn {
+	case WARN:
+		if mb.logLevel == ERROR || mb.logLevel == WARN {
 			return true
 		}
-	case Error:
-		if mb.logLevel == Error {
+	case ERROR:
+		if mb.logLevel == ERROR {
 			return true
 		}
 
@@ -284,7 +314,7 @@ func unmarshallFoo(msgParts []string) *FooMsg {
 	fooMsg := new(FooMsg)
 
 	if len(msgParts) > 0 {
-		fooMsg.Kind = Foo
+		fooMsg.Kind = FOO
 	}
 	if len(msgParts) > 1 {
 		fooMsg.Name = msgParts[1]
@@ -298,7 +328,7 @@ func unmarshallLog(msgParts []string) *LogMsg {
 	logMsg := new(LogMsg)
 
 	if len(msgParts) > 0 {
-		logMsg.Kind = Log
+		logMsg.Kind = LOG
 	}
 	if len(msgParts) > 1 {
 		logMsg.Level = LogLevel(msgParts[1])
@@ -318,7 +348,7 @@ func unmarshallHandset(msgParts []string) *HandsetMsg {
 	handsetMsg := new(HandsetMsg)
 
 	if len(msgParts) > 0 {
-		handsetMsg.Kind = Handset
+		handsetMsg.Kind = HANDSET
 	}
 	if len(msgParts) > 1 {
 		handsetMsg.Keys = msgParts[1:]
@@ -327,13 +357,27 @@ func unmarshallHandset(msgParts []string) *HandsetMsg {
 	return handsetMsg
 }
 
+func unmarshallRADriver(msgParts []string) *RADriverMsg { 
+
+	raDriverMsg := new(RADriverMsg)
+
+	if len(msgParts) > 0 {
+		raDriverMsg.Kind = RADRIVER
+	}
+	if len(msgParts) > 1 {
+		raDriverMsg.Cmd = RADriverCmd(msgParts[1])
+	}
+
+	return raDriverMsg
+}
+
 func (mb *MsgBroker) InfoLog(src string, body string) {
-	mb.PublishLog(makeLogMsg(Info, src, body))
+	mb.PublishLog(makeLogMsg(INFO, src, body))
 }
 func makeLogMsg(level LogLevel, src string, body string) LogMsg {
 
 	var logMsg LogMsg
-	logMsg.Kind = Log
+	logMsg.Kind = LOG
 	logMsg.Level = level
 	logMsg.Source = src
 	logMsg.Body = body
