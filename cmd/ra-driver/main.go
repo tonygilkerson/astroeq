@@ -7,9 +7,10 @@ import (
 	"github.com/tonygilkerson/astroeq/pkg/msg"
 
 	"machine"
-	"time"
 	"math"
+	"time"
 )
+
 // See wire.md for wiring details and pin assignments
 
 func main() {
@@ -41,7 +42,7 @@ func main() {
 	uartUpRxPin = machine.UART0_RX_PIN
 
 	// Note if UART1 was use it would be used here, however
-	// For now the RA-Driver is not using UART1, 
+	// For now the RA-Driver is not using UART1,
 	// I might make the RA-Driver the end of the conga line and so UART1 would not be needed
 
 	mb, err := msg.NewBroker(
@@ -61,7 +62,7 @@ func main() {
 
 	//
 	//
-	// Create subscription channels and 
+	// Create subscription channels and
 	// Register the them with the broker
 	//
 	fooCh := make(chan msg.FooMsg)
@@ -72,13 +73,7 @@ func main() {
 	//
 	// Start the subscription reader, it will read from the the UARTS
 	//
-	go mb.SubscriptionReader()
-
-	//
-	// Start the message consumers
-	//
-	go fooConsumer(fooCh, mb)
-	go raDriverConsumer(raDriverCh, mb)
+	go mb.SubscriptionReaderRoutine()
 
 	/////////////////////////////////////////////////////////////////////////////
 	// RA-Drive
@@ -97,7 +92,6 @@ func main() {
 		SDI:       machine.SPI0_SDI_PIN, // GP16
 	})
 
-
 	//
 	// motor
 	//
@@ -112,7 +106,7 @@ func main() {
 	raStep := machine.GP9
 	var raStepsPerRevolution int32 = 400
 	var raMaxHz int32 = 1000
-	var raMaxMicroStepSetting int32 = 16
+	var raMaxMicroStepSetting driver.MicroStep = 16
 	var raWormRatio int32 = 144
 	var raGearRatio int32 = 3
 	raMicroStep1 := machine.GP12
@@ -139,67 +133,72 @@ func main() {
 	)
 	ra.Configure()
 	// ra.RunAtHz(700.0)
+	ra.RunAtHz(300.0)
 	// ra.RunAtHz(200.0)
-	ra.RunAtSiderealRate()
-	
+	// ra.RunAtSiderealRate()
+
+	//
+	// Start the message consumers
+	//
+	go fooConsumerRoutine(fooCh, &mb)
+	go raConsumerRoutine(raDriverCh, &mb, &ra)
+	go raBroadcastInfoRoutine(&ra, &mb)
 
 	var position uint32 = 0
 	var lastPosition int = 0
 
-	// 
+	//
 	// Track by the second
 	//
 
+	for i := 0; i < 6000; i++ {
 
-		for  i := 0; i < 60; i++ {
+		position = ra.GetPosition()
 
-			position = ra.GetPosition()
-			
-			pos := int(position)
-			perSec := math.Abs(float64(pos-lastPosition))
+		pos := int(position)
+		perSec := math.Abs(float64(pos - lastPosition))
 
-			fmt.Printf("[main] position: %v, per sec: %.2f (81.92 expected))\n", position, perSec)
-			lastPosition = pos
-			time.Sleep(time.Millisecond * 1000)
-
-			//
-			// Testing to see if I can count one RA rotation
-			//
-			// The motor and encoder rotate together so one full turn of the motor is one full turn of the encoder
-			// The encoder positions are from 0 to 2^14 (16_384)
-			// So we should be able to just multiple by the gear ratios:
-			// 16_384 (1 motor turn) * 3 (main gear) * 144 (worm gear) = 7_077_888
-			// if position >= 7_077_888 {
-			// 	break
-			// }
-
-			//Test to the UART
-			uartUp.Write([]byte("."))
-		}
-
-		fmt.Println("[main] Reset RA and track by min...")
-		ra.ZeroRA() // DEVTODO done not seem to work, make sure I am clearing the rotation count as well
-		time.Sleep(time.Millisecond * 5000)
+		fmt.Printf("[main] position: %v, per sec: %.2f (81.92 expected))\n", position, perSec)
+		lastPosition = pos
+		time.Sleep(time.Millisecond * 1000)
 
 		//
-		// Track for a few min
-		for  i := 0; i < 5; i++ {
+		// Testing to see if I can count one RA rotation
+		//
+		// The motor and encoder rotate together so one full turn of the motor is one full turn of the encoder
+		// The encoder positions are from 0 to 2^14 (16_384)
+		// So we should be able to just multiple by the gear ratios:
+		// 16_384 (1 motor turn) * 3 (main gear) * 144 (worm gear) = 7_077_888
+		// if position >= 7_077_888 {
+		// 	break
+		// }
 
-			position = ra.GetPosition()
-			
-			pos := int(position)
-			perMin := math.Abs(float64(pos-lastPosition))
+		//Test to the UART
+		uartUp.Write([]byte("."))
+	}
 
-			fmt.Printf("[main] position: %v, per min: %.2f (4915.2 expected))\n", position, perMin)
-			lastPosition = pos
-			time.Sleep(time.Millisecond * 60000)
+	fmt.Println("[main] Reset RA and track by min...")
+	ra.ZeroRA() // DEVTODO done not seem to work, make sure I am clearing the rotation count as well
+	time.Sleep(time.Millisecond * 5000)
 
-		}
+	//
+	// Track for a few min
+	for i := 0; i < 15; i++ {
 
+		position = ra.GetPosition()
+
+		pos := int(position)
+		perMin := math.Abs(float64(pos - lastPosition))
+
+		fmt.Printf("[main] position: %v, per min: %.2f (4915.2 expected))\n", position, perMin)
+		lastPosition = pos
+		time.Sleep(time.Millisecond * 60000)
+
+	}
 
 	// Done
 	println("[main] Done!")
-	
+
 }
 
 func runLight() {
@@ -218,19 +217,45 @@ func runLight() {
 	led.High()
 }
 
-func fooConsumer(ch chan msg.FooMsg, mb msg.MsgBroker) {
+func fooConsumerRoutine(ch chan msg.FooMsg, mb *msg.MsgBroker) {
 
 	for foo := range ch {
-		fmt.Printf("[ra-driver.fooConsumer] - Kind: [%s], Name: [%s]\n", foo.Kind, foo.Name)
+		fmt.Printf("[ra-driver.fooConsumerRoutine] - Kind: [%s], Name: [%s]\n", foo.Kind, foo.Name)
 	}
 }
 
-func raDriverConsumer(ch chan msg.RADriverMsg, mb msg.MsgBroker) {
+func raConsumerRoutine(ch chan msg.RADriverMsg, mb *msg.MsgBroker, ra *driver.RADriver) {
 
-	for raDriver := range ch {
-		fmt.Printf("[ra-driver.raDriverConsumer] - Kind: [%s], Cmd: [%s]\n", raDriver.Kind, raDriver.Cmd)
-		//DEVTODO look for command and act on them
-		//        create a new apply() function for this
+	for raMsg := range ch {
+		fmt.Printf("[ra-driver.raDriverConsumer] - Kind: [%s], Cmd: [%s]\n", raMsg.Kind, raMsg.Cmd)
+		raDriverCtl(raMsg, ra)
+	}
+
+}
+
+func raDriverCtl(raMsg msg.RADriverMsg, ra *driver.RADriver) {
+
+	switch raMsg.Cmd {
+
+	case msg.RA_CMD_SET_DIR_NORTH:
+		ra.SetDirection(true)
+
+	case msg.RA_CMD_SET_DIR_SOUTH:
+		ra.SetDirection(false)
 	}
 }
 
+func raBroadcastInfoRoutine(ra *driver.RADriver, mb *msg.MsgBroker) {
+
+	for {
+		var raMsg msg.RADriverMsg
+		raMsg.Kind = msg.MSG_RADRIVER
+		raMsg.Cmd = msg.RA_CMD_INFO
+		raMsg.Position = ra.GetPosition()
+		raMsg.Direction = ra.GetDirection()
+
+		mb.PublishRADriver(raMsg)
+
+		time.Sleep(time.Millisecond * 1000)
+	}
+}

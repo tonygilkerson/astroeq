@@ -11,16 +11,18 @@ import (
 	"github.com/tonygilkerson/astroeq/pkg/encoder"
 )
 
+type MicroStep uint16
+
 // Microstep settings
 const (
-	full      int32 = 1
-	half      int32 = 2
-	quarter   int32 = 4
-	eight     int32 = 8
-	sixteenth int32 = 16
+	FULL      MicroStep = 1
+	HALF      MicroStep = 2
+	QUARTER   MicroStep = 4
+	EIGHTH    MicroStep = 8
+	SIXTEENTH MicroStep = 16
 )
 
-const siderealDayInSeconds = 86_164.1
+const SIDEREAL_DAY_IN_SECONDS = 86_164.1
 
 type PWM interface {
 	Configure(config machine.PWMConfig) error
@@ -42,7 +44,7 @@ type RADriver struct {
 
 	// Used to control the direction
 	direction bool
-	// The pin that controls the dirction of the motor rotation
+	// The pin that controls the direction of the motor rotation
 	directionPin machine.Pin
 
 	// The steps need for one full revolution of the motor
@@ -71,10 +73,10 @@ type RADriver struct {
 
 	// The micro stepping setting full, half, quarter, etc...
 	// Use 1 for full, 2 for half, 4 for quarter etc...
-	microStepSetting int32
+	microStepSetting MicroStep
 
 	// The limit or "highest" setting, 1 is the "lowest"
-	maxMicroStepSetting int32
+	maxMicroStepSetting MicroStep
 
 	// The gear ratios of your RA mount
 	// reference: http://www.astrofriend.eu/astronomy/astronomy-calculations/mount-gearbox-ratio/mount-gearbox-ratio.html
@@ -104,7 +106,7 @@ func NewRADriver(
 	microStep1 machine.Pin,
 	microStep2 machine.Pin,
 	microStep3 machine.Pin,
-	maxMicroStepSetting int32,
+	maxMicroStepSetting MicroStep,
 	wormRatio int32,
 	gearRatio int32,
 	encoderSPI machine.SPI,
@@ -175,19 +177,14 @@ func (ra *RADriver) Configure() {
 
 	// Direction
 	ra.directionPin.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	if ra.direction {
-		ra.directionPin.High()
-	} else {
-		ra.directionPin.Low()
-	}
-
+	ra.SetDirection(ra.direction)
 
 	// RA Encoder
 	ra.encoder.Configure()
 	ra.encoder.ZeroRA()
 
 	// Start go routine to monitor position
-	go ra.monitorPosition()
+	go ra.monitorPositionRoutine()
 
 }
 
@@ -195,7 +192,7 @@ func (ra *RADriver) ZeroRA() {
 	ra.encoder.ZeroRA()
 }
 
-func (ra *RADriver) setMicroStepSetting(ms int32) {
+func (ra *RADriver) setMicroStepSetting(ms MicroStep) {
 
 	ra.microStepSetting = ms
 
@@ -257,8 +254,8 @@ func (ra *RADriver) setMicroStepSetting(ms int32) {
 func (ra *RADriver) RunAtSiderealRate() {
 
 	// systemRatio := ra.stepsPerRevolution * ra.maxMicroStepSetting * ra.wormRatio * ra.gearRatio
-	systemRatio := ra.stepsPerRevolution * ra.maxMicroStepSetting * ra.wormRatio * ra.gearRatio
-	sideralHz := float64(systemRatio) / siderealDayInSeconds
+	systemRatio := ra.stepsPerRevolution * int32(ra.maxMicroStepSetting) * ra.wormRatio * ra.gearRatio
+	sideralHz := float64(systemRatio) / SIDEREAL_DAY_IN_SECONDS
 
 	ra.RunAtHz(sideralHz)
 
@@ -276,7 +273,7 @@ func (ra *RADriver) RunAtHz(hz float64) {
 	ra.pwm.SetPeriod(period)
 }
 
-func (ra *RADriver) monitorPosition() {
+func (ra *RADriver) monitorPositionRoutine() {
 
 	for {
 		position, err := ra.encoder.GetPositionRA()
@@ -291,4 +288,20 @@ func (ra *RADriver) monitorPosition() {
 
 func (ra *RADriver) GetPosition() uint32 {
 	return ra.position
+}
+
+func (ra *RADriver) GetDirection() bool {
+	return ra.direction
+}
+
+func (ra *RADriver) SetDirection(direction bool) {
+
+	ra.direction = direction
+
+	if direction {
+		ra.directionPin.High()
+	} else {
+		ra.directionPin.Low()
+	}
+
 }

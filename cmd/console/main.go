@@ -82,13 +82,13 @@ func main() {
 	//
 	// Start the message consumers
 	//
-	go fooConsumer(fooCh, mb, consoleCh)
-	go logConsumer(logCh, mb, consoleCh)
+	go fooConsumerRoutine(fooCh, mb, consoleCh)
+	go logConsumerRoutine(logCh, mb, consoleCh)
 
 	//
 	// Start the subscription reader, it will read from the the UARTS
 	//
-	go mb.SubscriptionReader()
+	go mb.SubscriptionReaderRoutine()
 
 	/////////////////////////////////////////////////////////////////////////////
 	// writeConsole
@@ -129,7 +129,7 @@ func cls(d *st7789.Device) {
 }
 
 // Read from fooCh and write to consoleCh
-func fooConsumer(fooCh chan msg.FooMsg, mb msg.MsgBroker, consoleCh chan string) {
+func fooConsumerRoutine(fooCh chan msg.FooMsg, mb msg.MsgBroker, consoleCh chan string) {
 
 	for msg := range fooCh {
 		s := fmt.Sprintf("%s: %s", msg.Kind, msg.Name)
@@ -138,7 +138,7 @@ func fooConsumer(fooCh chan msg.FooMsg, mb msg.MsgBroker, consoleCh chan string)
 }
 
 // Read from logCh and write to consoleCh
-func logConsumer(logCh chan msg.LogMsg, mb msg.MsgBroker, consoleCh chan string) {
+func logConsumerRoutine(logCh chan msg.LogMsg, mb msg.MsgBroker, consoleCh chan string) {
 
 	for msg := range logCh {
 		s := fmt.Sprintf("%s: %s %s\n\n", msg.Kind, msg.Source, msg.Level)
@@ -183,7 +183,7 @@ func GoConsole(display st7789.Device, ch chan string) {
 	// 		cls(&display)
 	// 		first = false
 	// 	}
-		
+
 	// 	if l > 9 {
 	// 		display.DrawFastHLine(0, 300, vline+7, black) // erase the last line
 	// 		l = 1

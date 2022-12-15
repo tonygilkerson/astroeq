@@ -55,7 +55,7 @@ func (ra *RAEncoder) ZeroRA() {
 
 	fmt.Println("[ZeroRA] - Set RA to position zero!")
 	ra.WriteRead(AMT22_NOP, AMT22_ZERO)
-	
+
 	ra.raPosition = 0
 	ra.previousEncoderReading = 0
 	ra.rotationCount = 0
@@ -65,7 +65,7 @@ func (ra *RAEncoder) ZeroRA() {
 
 	p, e := ra.GetPositionRA()
 	fmt.Printf("[ZeroRA] - Check to see if it works, current position is: %v or error: %v", p, e)
-	
+
 }
 
 func (ra *RAEncoder) GetPositionRA() (position uint32, err error) {
@@ -91,7 +91,7 @@ func (ra *RAEncoder) GetPositionRA() (position uint32, err error) {
 
 		// Check if the difference between current and previous position is large
 		// If so then we must have made a full rotation
-		if math.Abs(float64(ra.previousEncoderReading) - float64(encoderReading)) > float64(MAX_ENCODER_READING/2) {
+		if math.Abs(float64(ra.previousEncoderReading)-float64(encoderReading)) > float64(MAX_ENCODER_READING/2) {
 
 			// Next check to see if we are going forward or backwards
 			if uint32(encoderReading) < (MAX_ENCODER_READING/2) && ra.previousEncoderReading > (MAX_ENCODER_READING/2) {
@@ -102,7 +102,7 @@ func (ra *RAEncoder) GetPositionRA() (position uint32, err error) {
 				ra.rotationCount--
 			}
 
-	  }
+		}
 
 		// It does not make sense to go negative
 		if ra.rotationCount < 0 {
@@ -116,7 +116,6 @@ func (ra *RAEncoder) GetPositionRA() (position uint32, err error) {
 		// println("[GetPositionRA] encoderReading: ", encoderReading, " ra.rotationCount: ", ra.rotationCount , " ra.raPosition: ", ra.raPosition)
 		return ra.raPosition, nil
 
-
 	} else {
 		return 0, errors.New("Bad parity check")
 	}
@@ -124,7 +123,6 @@ func (ra *RAEncoder) GetPositionRA() (position uint32, err error) {
 }
 
 func (ra *RAEncoder) WriteRead(b1 byte, b2 byte) (r1, r2 byte) {
-
 
 	// Select RA channel
 	ra.cs.Low()

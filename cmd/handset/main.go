@@ -24,7 +24,7 @@ import (
 	GP1 																																																				UART0 RX
 	GP2 																																											scrollDnKey
 	GP3 																																											zeroKey
-	GP4 																																											scrollUpKey
+	GP4 																																											scrollUP_KEY
 	GP5 																																											sevenKey
 	GP6 																																											eightKey
 	GP7 																																											nineKey
@@ -100,7 +100,7 @@ func main() {
 	mb.Configure()
 
 	//
-	// Create subscription channels and 
+	// Create subscription channels and
 	// Register the them with the broker
 	//
 	fooCh := make(chan msg.FooMsg)
@@ -109,18 +109,15 @@ func main() {
 	handsetCh := make(chan msg.HandsetMsg)
 	mb.SetHandsetCh(handsetCh)
 
-
 	//
 	// Start the subscription reader, it will read from the the UARTS
 	//
-	go mb.SubscriptionReader()
+	go mb.SubscriptionReaderRoutine()
 
 	//
 	// Start the message consumers
 	//
-	go fooConsumer(fooCh, mb)
-	
-
+	go fooConsumerRoutine(fooCh, mb)
 
 	/////////////////////////////////////////////////////////////////////////////
 	// Display
@@ -195,7 +192,7 @@ func main() {
 	eightKey := machine.GP6
 	nineKey := machine.GP7
 
-	scrollUpKey := machine.GP4
+	scrollUP_KEY := machine.GP4
 	scrollDnKey := machine.GP2
 
 	rightKey := machine.GP14
@@ -218,7 +215,7 @@ func main() {
 		sevenKey,
 		eightKey,
 		nineKey,
-		scrollUpKey,
+		scrollUP_KEY,
 		scrollDnKey,
 		rightKey,
 		leftKey,
@@ -233,7 +230,7 @@ func main() {
 	//
 	// Start the local key consumer
 	go handsetStateMachine(&handset, &display, keyStrokesCh, &mb)
-	go handsetConsumer(&handset, &display, handsetCh, &mb)
+	go handsetConsumerRoutine(&handset, &display, handsetCh, &mb)
 
 	//
 	// Keep main live
@@ -260,26 +257,25 @@ func runLight() {
 	led.High()
 }
 
-func fooConsumer(ch chan msg.FooMsg, mb msg.MsgBroker) {
+func fooConsumerRoutine(ch chan msg.FooMsg, mb msg.MsgBroker) {
 
 	for foo := range ch {
-		fmt.Printf("[handset.fooConsumer] - Kind: [%s], name: [%s]\n", foo.Kind, foo.Name)
+		fmt.Printf("[handset.fooConsumerRoutine] - Kind: [%s], name: [%s]\n", foo.Kind, foo.Name)
 	}
 }
 
-func handsetConsumer(handset *hid.Handset, display *ssd1351.Device, ch chan msg.HandsetMsg, mb *msg.MsgBroker) {
+func handsetConsumerRoutine(handset *hid.Handset, display *ssd1351.Device, ch chan msg.HandsetMsg, mb *msg.MsgBroker) {
 	red := color.RGBA{0, 0, 255, 255}
 
 	for hs := range ch {
-		fmt.Printf("[handset.handsetConsumer] - Kind: [%s], Key: [%v]\n", hs.Kind, hs.Keys)
+		fmt.Printf("[handset.handsetConsumerRoutine] - Kind: [%s], Key: [%v]\n", hs.Kind, hs.Keys)
 		display.FillScreen(color.RGBA{0, 0, 0, 0})
 		var out string
 
-		
 		for _, k := range hs.Keys {
 			key := handset.GetKeyFromString(k)
 			out = handset.StateMachine(key)
-		} 
+		}
 		tinyfont.WriteLine(display, &freemono.Regular9pt7b, 3, 15, out, red)
 
 		mb.InfoLog("Handset", out)
