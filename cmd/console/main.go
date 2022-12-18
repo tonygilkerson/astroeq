@@ -94,7 +94,15 @@ func main() {
 	// writeConsole
 	/////////////////////////////////////////////////////////////////////////////
 
-	GoConsole(display, consoleCh)
+	go consoleRoutine(display, consoleCh)
+
+	//
+	// Keep main live
+	//
+	for {
+		time.Sleep(time.Millisecond * 5000)
+		fmt.Println("[console.main] heart beat...")
+	}
 }
 
 func runLight() {
@@ -147,7 +155,7 @@ func logConsumerRoutine(logCh chan msg.LogMsg, mb msg.MsgBroker, consoleCh chan 
 	}
 }
 
-func GoConsole(display st7789.Device, ch chan string) {
+func consoleRoutine(display st7789.Device, ch chan string) {
 
 	width, height := display.Size()
 	fmt.Printf("width: %v, height: %v\n", width, height)

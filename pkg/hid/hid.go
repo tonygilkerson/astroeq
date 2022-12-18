@@ -1,9 +1,15 @@
 package hid
 
 import (
+	"fmt"
+	"image/color"
 	"machine"
 	"strconv"
 	"time"
+
+	"tinygo.org/x/drivers/ssd1351"
+	"tinygo.org/x/tinyfont"
+	"tinygo.org/x/tinyfont/freemono"
 )
 
 const VERSION string = "v0-alpha4"
@@ -12,6 +18,8 @@ const LOCATION_LATITUDE_HOME = "+39.8491"
 const LOCATION_LONGITUDE_HOME = "-83.9768"
 const LOCATION_ELEVATION = "+270"
 
+// The handset is controlled by a state machine. State is used to control what is
+// displayed on the screen and what keys are valid input
 type State uint8
 
 const (
@@ -29,6 +37,7 @@ const (
 	SET_TIME_MSG_ERROR
 )
 
+// Each button on the handset corresponds to one of the following Keys
 type Key uint8
 
 const (
@@ -57,7 +66,11 @@ const (
 	ENTER_KEY
 )
 
+// The Handset properties are maintained by the user via the handset.
+// The user can perform basic CRUD operations on the Handset properties as well as
+// use them in commands sent over the message bus.
 type Handset struct {
+	screen       *Screen
 	isSetup      bool
 	state        State
 	scrollDnKey  machine.Pin
@@ -123,8 +136,19 @@ type Handset struct {
 	locationElevation    int16
 }
 
+// The Screen properties are used to determine what is written to the display
+type Screen struct {
+	displayDevice *ssd1351.Device
+	font          *tinyfont.Font
+	fontColor     color.RGBA
+	direction     bool
+	statusBarText string
+	bodyText      string
+}
+
 // Returns a new Handset
 func NewHandset(
+	displayDevice *ssd1351.Device,
 	zeroKey machine.Pin,
 	oneKey machine.Pin,
 	twoKey machine.Pin,
@@ -148,7 +172,12 @@ func NewHandset(
 	setupKey machine.Pin,
 	enterKey machine.Pin,
 ) (Handset, error) {
+
+	var screen Screen
+	screen.displayDevice = displayDevice
+
 	return Handset{
+		screen:               &screen,
 		isSetup:              false,
 		state:                FIRST,
 		scrollDnKey:          scrollDnKey,
@@ -170,10 +199,16 @@ func NewHandset(
 		escKey:               escKey,
 		setupKey:             setupKey,
 		enterKey:             enterKey,
+		keyPressed:           0,
 		keyStrokes:           make(chan Key, 100),
+		dspOut:               "",
+		currentDateStr:       "2022",
+		currentTimeStr:       "",
+		currentTime:          time.Time{},
 		locationLatitudeStr:  LOCATION_LATITUDE_HOME,
 		locationLongitudeStr: LOCATION_LONGITUDE_HOME,
 		locationElevationStr: LOCATION_ELEVATION,
+		locationElevation:    0,
 	}, nil
 }
 
@@ -181,6 +216,17 @@ func NewHandset(
 // starts a go routine to listen for key strokes and publishes each to the key chan
 // the key channel is returned for key stroke subscribers
 func (hs *Handset) Configure() chan Key {
+
+	//
+	// Init Screen
+	//
+	hs.screen.font = &freemono.Regular9pt7b
+	hs.screen.fontColor = color.RGBA{0, 0, 255, 255} // RED
+	hs.screen.statusBarText = "IgGLpq|X"
+
+	//
+	// Configure Key Pins
+	//
 	hs.scrollDnKey.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
 	hs.zeroKey.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
 	hs.scrollUP_KEY.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
@@ -201,6 +247,9 @@ func (hs *Handset) Configure() chan Key {
 	hs.setupKey.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
 	hs.enterKey.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
 
+	//
+	// Register interrupts
+	//
 	hs.zeroKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = ZERO_KEY })
 	hs.oneKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = ONE_KEY })
 	hs.twoKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = TWO_KEY })
@@ -221,7 +270,9 @@ func (hs *Handset) Configure() chan Key {
 	hs.setupKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = SETUP_KEY })
 	hs.enterKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = ENTER_KEY })
 
+	//
 	// Start go routine that will listen for key strokes and publish them on a channel
+	//
 	go hs.publishKeysRoutine()
 
 	return hs.keyStrokes
@@ -597,6 +648,45 @@ func (hs *Handset) StateMachine(key Key) string {
 	return hs.dspOut
 }
 
+func (hs *Handset) RenderScreen() {
+
+	status := [10]byte{' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '}
+
+	// DEVTODO - try to do better than clearing the screen each time
+	hs.screen.displayDevice.FillScreen(color.RGBA{0, 0, 0, 0})
+
+	// Compute the status bar text
+	status[0] = 'S'
+	if hs.screen.direction {
+		status[0] = 'N'
+	}
+	statusText := fmt.Sprintf("%s\n-----------", status)
+	hs.screen.statusBarText = statusText
+
+	// Status Bar
+	tinyfont.WriteLine(
+		hs.screen.displayDevice,
+		hs.screen.font,
+		3, 10,
+		statusText,
+		hs.screen.fontColor)
+
+	// hs.screen.displayDevice.DrawFastHLine(5,5,150,hs.screen.fontColor)
+
+	// Body
+	tinyfont.WriteLine(
+		hs.screen.displayDevice,
+		hs.screen.font,
+		3, 45,
+		hs.screen.bodyText,
+		hs.screen.fontColor)
+}
+
+func (hs *Handset) SetScreenBodyText(body string) {
+	hs.screen.bodyText = body
+}
+
+// Util functions
 func keyIsDigit(key Key) bool {
 	switch key {
 	case ZERO_KEY:

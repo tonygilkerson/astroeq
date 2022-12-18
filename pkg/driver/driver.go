@@ -254,7 +254,7 @@ func (ra *RADriver) setMicroStepSetting(ms MicroStep) {
 func (ra *RADriver) RunAtSiderealRate() {
 
 	// systemRatio := ra.stepsPerRevolution * ra.maxMicroStepSetting * ra.wormRatio * ra.gearRatio
-	systemRatio := ra.stepsPerRevolution * int32(ra.maxMicroStepSetting) * ra.wormRatio * ra.gearRatio
+	systemRatio := ra.stepsPerRevolution * int32(1) * ra.wormRatio * ra.gearRatio //DEVTODO - try some hard code
 	sideralHz := float64(systemRatio) / SIDEREAL_DAY_IN_SECONDS
 
 	ra.RunAtHz(sideralHz)
@@ -280,7 +280,7 @@ func (ra *RADriver) monitorPositionRoutine() {
 		if err == nil {
 			ra.position = position
 		} else {
-			println("Error getting position")
+			println("[monitorPositionRoutine] Error getting position")
 		}
 		time.Sleep(time.Millisecond * 450) //DEVTODO - not sure if this is too short or too long?
 	}

@@ -132,10 +132,12 @@ func main() {
 		raEncoderCS,
 	)
 	ra.Configure()
-	// ra.RunAtHz(700.0)
-	ra.RunAtHz(300.0)
-	// ra.RunAtHz(200.0)
-	// ra.RunAtSiderealRate()
+	//ra.RunAtHz(700.0)
+	//ra.RunAtHz(300.0)
+	//ra.RunAtHz(200.0)
+	// ra.RunAtHz(50.0)
+	//ra.RunAtHz(40.0)
+	ra.RunAtSiderealRate()
 
 	//
 	// Start the message consumers
@@ -208,7 +210,7 @@ func runLight() {
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	// blink run light for a bit seconds so I can tell it is starting
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 20; i++ {
 		led.High()
 		time.Sleep(time.Millisecond * 100)
 		led.Low()

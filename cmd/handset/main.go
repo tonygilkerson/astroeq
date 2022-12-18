@@ -10,8 +10,6 @@ import (
 	"github.com/tonygilkerson/astroeq/pkg/msg"
 
 	"tinygo.org/x/drivers/ssd1351"
-	"tinygo.org/x/tinyfont"
-	"tinygo.org/x/tinyfont/freemono"
 )
 
 /*
@@ -159,27 +157,10 @@ func main() {
 	display.Data(0x62)
 
 	display.FillScreen(color.RGBA{0, 0, 0, 0})
-	// red := color.RGBA{0, 0, 255, 255}
 
-	// tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 15, "ESC = clr", red)
-	// display.FillRectangle(3, 20, 125, 1, red)
-
-	// tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 40, "Test 0001", red)
-	// display.FillRectangle(3, 45, 124, 1, red)
-
-	// tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 65, "Test 0002", red)
-	// display.FillRectangle(3, 70, 123, 1, red)
-
-	// tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 90, "Test 0003", red)
-	// display.FillRectangle(3, 70, 123, 1, red)
-
-	// tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 3, 115, "Test 0004", red)
-	// display.FillRectangle(3, 70, 123, 1, red)
-
-	/////////////////////////////////////////////////////////////////////////////
+	//
 	// keypad keys
-	/////////////////////////////////////////////////////////////////////////////
-
+	//
 	zeroKey := machine.GP3
 	oneKey := machine.GP11
 	twoKey := machine.GP12
@@ -205,6 +186,7 @@ func main() {
 	enterKey := machine.GP20
 
 	handset, _ := hid.NewHandset(
+		&display,
 		zeroKey,
 		oneKey,
 		twoKey,
@@ -229,14 +211,16 @@ func main() {
 
 	//
 	// Start the local key consumer
-	go handsetStateMachine(&handset, &display, keyStrokesCh, &mb)
-	go handsetConsumerRoutine(&handset, &display, handsetCh, &mb)
+	//
+	go handsetStateMachineRoutine(&handset, keyStrokesCh, &mb)
+
 
 	//
 	// Keep main live
+	//
 	for {
 		time.Sleep(time.Millisecond * 5000)
-		fmt.Println("Handset.main heart beat...")
+		fmt.Println("[Handset.main] heart beat...")
 	}
 
 }
@@ -264,40 +248,21 @@ func fooConsumerRoutine(ch chan msg.FooMsg, mb msg.MsgBroker) {
 	}
 }
 
-func handsetConsumerRoutine(handset *hid.Handset, display *ssd1351.Device, ch chan msg.HandsetMsg, mb *msg.MsgBroker) {
-	red := color.RGBA{0, 0, 255, 255}
 
-	for hs := range ch {
-		fmt.Printf("[handset.handsetConsumerRoutine] - Kind: [%s], Key: [%v]\n", hs.Kind, hs.Keys)
-		display.FillScreen(color.RGBA{0, 0, 0, 0})
-		var out string
+func handsetStateMachineRoutine(hs *hid.Handset, keyStrokesCh chan hid.Key, mb *msg.MsgBroker) {
 
-		for _, k := range hs.Keys {
-			key := handset.GetKeyFromString(k)
-			out = handset.StateMachine(key)
-		}
-		tinyfont.WriteLine(display, &freemono.Regular9pt7b, 3, 15, out, red)
+	// status bar
 
-		mb.InfoLog("Handset", out)
-
-	}
-}
-
-func handsetStateMachine(handset *hid.Handset, display *ssd1351.Device, keyStrokesCh chan hid.Key, mb *msg.MsgBroker) {
-
-	red := color.RGBA{0, 0, 255, 255}
+	// Menu interaction
 	var noKey hid.Key
+	hs.SetScreenBodyText(hs.StateMachine(noKey))
 
-	out := handset.StateMachine(noKey)
-	tinyfont.WriteLine(display, &freemono.Regular9pt7b, 3, 15, out, red)
+	hs.RenderScreen()
 
 	for k := range keyStrokesCh {
-		display.FillScreen(color.RGBA{0, 0, 0, 0})
 
-		out := handset.StateMachine(k)
-		tinyfont.WriteLine(display, &freemono.Regular9pt7b, 3, 15, out, red)
-
-		mb.InfoLog("Handset", out)
+		hs.SetScreenBodyText(hs.StateMachine(k))
+		hs.RenderScreen()
 
 	}
 
