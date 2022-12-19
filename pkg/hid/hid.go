@@ -70,7 +70,7 @@ const (
 // The user can perform basic CRUD operations on the Handset properties as well as
 // use them in commands sent over the message bus.
 type Handset struct {
-	screen       *Screen
+	Screen       *Screen
 	isSetup      bool
 	state        State
 	scrollDnKey  machine.Pin
@@ -141,9 +141,10 @@ type Screen struct {
 	displayDevice *ssd1351.Device
 	font          *tinyfont.Font
 	fontColor     color.RGBA
-	direction     bool
 	statusBarText string
-	bodyText      string
+	BodyText      string
+	Direction     bool
+	Position      uint32
 }
 
 // Returns a new Handset
@@ -177,7 +178,7 @@ func NewHandset(
 	screen.displayDevice = displayDevice
 
 	return Handset{
-		screen:               &screen,
+		Screen:               &screen,
 		isSetup:              false,
 		state:                FIRST,
 		scrollDnKey:          scrollDnKey,
@@ -220,9 +221,9 @@ func (hs *Handset) Configure() chan Key {
 	//
 	// Init Screen
 	//
-	hs.screen.font = &freemono.Regular9pt7b
-	hs.screen.fontColor = color.RGBA{0, 0, 255, 255} // RED
-	hs.screen.statusBarText = "IgGLpq|X"
+	hs.Screen.font = &freemono.Regular9pt7b
+	hs.Screen.fontColor = color.RGBA{0, 0, 255, 255} // RED
+	hs.Screen.statusBarText = "IgGLpq|X"
 
 	//
 	// Configure Key Pins
@@ -653,37 +654,33 @@ func (hs *Handset) RenderScreen() {
 	status := [10]byte{' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '}
 
 	// DEVTODO - try to do better than clearing the screen each time
-	hs.screen.displayDevice.FillScreen(color.RGBA{0, 0, 0, 0})
+	hs.Screen.displayDevice.FillScreen(color.RGBA{0, 0, 0, 0})
 
 	// Compute the status bar text
 	status[0] = 'S'
-	if hs.screen.direction {
+	if hs.Screen.Direction {
 		status[0] = 'N'
 	}
 	statusText := fmt.Sprintf("%s\n-----------", status)
-	hs.screen.statusBarText = statusText
+	hs.Screen.statusBarText = statusText
 
 	// Status Bar
 	tinyfont.WriteLine(
-		hs.screen.displayDevice,
-		hs.screen.font,
+		hs.Screen.displayDevice,
+		hs.Screen.font,
 		3, 10,
 		statusText,
-		hs.screen.fontColor)
+		hs.Screen.fontColor)
 
-	// hs.screen.displayDevice.DrawFastHLine(5,5,150,hs.screen.fontColor)
+	// hs.Screen.displayDevice.DrawFastHLine(5,5,150,hs.Screen.fontColor)
 
 	// Body
 	tinyfont.WriteLine(
-		hs.screen.displayDevice,
-		hs.screen.font,
+		hs.Screen.displayDevice,
+		hs.Screen.font,
 		3, 45,
-		hs.screen.bodyText,
-		hs.screen.fontColor)
-}
-
-func (hs *Handset) SetScreenBodyText(body string) {
-	hs.screen.bodyText = body
+		hs.Screen.BodyText,
+		hs.Screen.fontColor)
 }
 
 // Util functions

@@ -104,6 +104,9 @@ func main() {
 	fooCh := make(chan msg.FooMsg)
 	mb.SetFooCh(fooCh)
 
+	raDriverCh := make(chan msg.RADriverMsg)
+	mb.SetRADriverCh(raDriverCh)
+
 	handsetCh := make(chan msg.HandsetMsg)
 	mb.SetHandsetCh(handsetCh)
 
@@ -111,11 +114,6 @@ func main() {
 	// Start the subscription reader, it will read from the the UARTS
 	//
 	go mb.SubscriptionReaderRoutine()
-
-	//
-	// Start the message consumers
-	//
-	go fooConsumerRoutine(fooCh, mb)
 
 	/////////////////////////////////////////////////////////////////////////////
 	// Display
@@ -210,10 +208,15 @@ func main() {
 	keyStrokesCh := handset.Configure()
 
 	//
+	// Start the message consumers
+	//
+	go fooConsumerRoutine(fooCh, &mb)
+	go raDriverConsumerRoutine(&handset, raDriverCh, &mb)
+
+	//
 	// Start the local key consumer
 	//
 	go handsetStateMachineRoutine(&handset, keyStrokesCh, &mb)
-
 
 	//
 	// Keep main live
@@ -241,29 +244,49 @@ func runLight() {
 	led.High()
 }
 
-func fooConsumerRoutine(ch chan msg.FooMsg, mb msg.MsgBroker) {
-
-	for foo := range ch {
-		fmt.Printf("[handset.fooConsumerRoutine] - Kind: [%s], name: [%s]\n", foo.Kind, foo.Name)
-	}
-}
-
-
 func handsetStateMachineRoutine(hs *hid.Handset, keyStrokesCh chan hid.Key, mb *msg.MsgBroker) {
 
 	// status bar
 
 	// Menu interaction
 	var noKey hid.Key
-	hs.SetScreenBodyText(hs.StateMachine(noKey))
+
+	hs.Screen.BodyText = hs.StateMachine(noKey)
 
 	hs.RenderScreen()
 
 	for k := range keyStrokesCh {
 
-		hs.SetScreenBodyText(hs.StateMachine(k))
+		hs.Screen.BodyText = hs.StateMachine(k)
 		hs.RenderScreen()
 
 	}
 
+}
+
+func fooConsumerRoutine(ch chan msg.FooMsg, mb *msg.MsgBroker) {
+
+	for foo := range ch {
+		fmt.Printf("[handset.fooConsumerRoutine] - Kind: [%s], name: [%s]\n", foo.Kind, foo.Name)
+	}
+}
+
+func raDriverConsumerRoutine(hs *hid.Handset, ch chan msg.RADriverMsg, mb *msg.MsgBroker) {
+
+	for raDriver := range ch {
+		fmt.Printf("[handset.raDriverConsumerRoutine] - Kind: [%s], Cmd: [%s]\n", raDriver.Kind, raDriver.Cmd)
+		fmt.Printf("[handset.raDriverConsumerRoutine] - msg: [%v]\n", raDriver)
+
+		// We are only interested in raDriver info messages
+		if raDriver.Cmd != msg.RA_CMD_INFO {
+			continue
+		}
+
+		hs.Screen.Direction = raDriver.Direction
+		hs.Screen.Position = raDriver.Position
+
+		// DEVTODO - make this a render status not the entire screen
+		hs.RenderScreen()
+
+	}
 }

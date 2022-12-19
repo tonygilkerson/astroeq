@@ -3,6 +3,7 @@ package msg
 import (
 	"fmt"
 	"machine"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -54,13 +55,13 @@ type HandsetMsg struct {
 // RA Driver message used for sending commands to the RA Driver and for publishing it current status
 // The following are sample messages
 //
-// ^RADriver|SetDirNorth~
-// ^RADriver|INFO|12345~
+// ^RADriver|SetDirNorth|true|12345~
+// ^RADriver|INFO|true|12345~
 type RADriverMsg struct {
 	Kind      MsgType
 	Cmd       RADriverCmd
-	Position  uint32
 	Direction bool
+	Position  uint32
 }
 
 type MsgInterface interface {
@@ -229,7 +230,7 @@ func (mb *MsgBroker) DispatchMessage(msgParts []string) {
 		msg := unmarshallRADriver(msgParts)
 		if mb.raDriverCh != nil {
 			mb.raDriverCh <- *msg
-		}
+		} 
 	default:
 		fmt.Println("[DispatchMessage] - no match found")
 	}
@@ -384,6 +385,19 @@ func unmarshallRADriver(msgParts []string) *RADriverMsg {
 	}
 	if len(msgParts) > 1 {
 		raDriverMsg.Cmd = RADriverCmd(msgParts[1])
+	}
+
+	if len(msgParts) > 2 {
+		if RADriverCmd(msgParts[2]) == "true" {
+			raDriverMsg.Direction = true
+		} else {
+			raDriverMsg.Direction = false
+		}
+	}
+
+	if len(msgParts) > 3 {
+		p,_ := strconv.Atoi(msgParts[3])
+		raDriverMsg.Position = uint32(p)
 	}
 
 	return raDriverMsg
