@@ -230,7 +230,7 @@ func (mb *MsgBroker) DispatchMessage(msgParts []string) {
 		msg := unmarshallRADriver(msgParts)
 		if mb.raDriverCh != nil {
 			mb.raDriverCh <- *msg
-		} 
+		}
 	default:
 		fmt.Println("[DispatchMessage] - no match found")
 	}
@@ -396,7 +396,7 @@ func unmarshallRADriver(msgParts []string) *RADriverMsg {
 	}
 
 	if len(msgParts) > 3 {
-		p,_ := strconv.Atoi(msgParts[3])
+		p, _ := strconv.Atoi(msgParts[3])
 		raDriverMsg.Position = uint32(p)
 	}
 

@@ -39,39 +39,39 @@ func NewRA(spi machine.SPI, cs machine.Pin, resolution int8) RAEncoder {
 }
 
 // Configure RA encoder
-func (ra *RAEncoder) Configure() {
+func (raEncoder *RAEncoder) Configure() {
 
 	//
 	// Channel select for encoder on the SPI bus
 	// initialize high i.e. Not listening
 	//
-	ra.cs.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	ra.cs.High()
+	raEncoder.cs.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	raEncoder.cs.High()
 
 }
 
 // Zero the RA encoder
-func (ra *RAEncoder) ZeroRA() {
+func (raEncoder *RAEncoder) ZeroRA() {
 
 	fmt.Println("[ZeroRA] - Set RA to position zero!")
-	ra.WriteRead(AMT22_NOP, AMT22_ZERO)
+	raEncoder.WriteRead(AMT22_NOP, AMT22_ZERO)
 
-	ra.raPosition = 0
-	ra.previousEncoderReading = 0
-	ra.rotationCount = 0
+	raEncoder.raPosition = 0
+	raEncoder.previousEncoderReading = 0
+	raEncoder.rotationCount = 0
 
 	// allow time to reset
 	time.Sleep(time.Millisecond * 240)
 
-	p, e := ra.GetPositionRA()
+	p, e := raEncoder.GetPositionRA()
 	fmt.Printf("[ZeroRA] - Check to see if it works, current position is: %v or error: %v", p, e)
 
 }
 
-func (ra *RAEncoder) GetPositionRA() (position uint32, err error) {
+func (raEncoder *RAEncoder) GetPositionRA() (position uint32, err error) {
 
 	var encoderReading uint16
-	r1, r2 := ra.WriteRead(AMT22_NOP, AMT22_NOP)
+	r1, r2 := raEncoder.WriteRead(AMT22_NOP, AMT22_NOP)
 
 	// Put r1 into into the upper 8 bits
 	responseUpper := uint16(r1)
@@ -91,30 +91,30 @@ func (ra *RAEncoder) GetPositionRA() (position uint32, err error) {
 
 		// Check if the difference between current and previous position is large
 		// If so then we must have made a full rotation
-		if math.Abs(float64(ra.previousEncoderReading)-float64(encoderReading)) > float64(MAX_ENCODER_READING/2) {
+		if math.Abs(float64(raEncoder.previousEncoderReading)-float64(encoderReading)) > float64(MAX_ENCODER_READING/2) {
 
 			// Next check to see if we are going forward or backwards
-			if uint32(encoderReading) < (MAX_ENCODER_READING/2) && ra.previousEncoderReading > (MAX_ENCODER_READING/2) {
+			if uint32(encoderReading) < (MAX_ENCODER_READING/2) && raEncoder.previousEncoderReading > (MAX_ENCODER_READING/2) {
 				// the encoder has moved beyond it's max in the "forward" direction, if so add to the rotationCount
-				ra.rotationCount++
-			} else if uint32(encoderReading) > (MAX_ENCODER_READING/2) && ra.previousEncoderReading < (MAX_ENCODER_READING/2) {
+				raEncoder.rotationCount++
+			} else if uint32(encoderReading) > (MAX_ENCODER_READING/2) && raEncoder.previousEncoderReading < (MAX_ENCODER_READING/2) {
 				// the encoder has moved beyond it's min in the "backward" direction, if so subtract from the rotationCount
-				ra.rotationCount--
+				raEncoder.rotationCount--
 			}
 
 		}
 
 		// It does not make sense to go negative
-		if ra.rotationCount < 0 {
-			ra.rotationCount = 0
+		if raEncoder.rotationCount < 0 {
+			raEncoder.rotationCount = 0
 		}
 
 		// Save ra position and its previous position
-		ra.raPosition = uint32(encoderReading) + (uint32(ra.rotationCount) * MAX_ENCODER_READING)
-		ra.previousEncoderReading = uint32(encoderReading)
+		raEncoder.raPosition = uint32(encoderReading) + (uint32(raEncoder.rotationCount) * MAX_ENCODER_READING)
+		raEncoder.previousEncoderReading = uint32(encoderReading)
 
 		// println("[GetPositionRA] encoderReading: ", encoderReading, " ra.rotationCount: ", ra.rotationCount , " ra.raPosition: ", ra.raPosition)
-		return ra.raPosition, nil
+		return raEncoder.raPosition, nil
 
 	} else {
 		return 0, errors.New("Bad parity check")
@@ -122,14 +122,14 @@ func (ra *RAEncoder) GetPositionRA() (position uint32, err error) {
 
 }
 
-func (ra *RAEncoder) WriteRead(b1 byte, b2 byte) (r1, r2 byte) {
+func (raEncoder *RAEncoder) WriteRead(b1 byte, b2 byte) (r1, r2 byte) {
 
 	// Select RA channel
-	ra.cs.Low()
+	raEncoder.cs.Low()
 	time.Sleep(time.Microsecond * 3) // wait min time see datasheet
 
 	// byte 1
-	r1, _ = ra.spi.Transfer(b1)
+	r1, _ = raEncoder.spi.Transfer(b1)
 	time.Sleep(time.Microsecond * 3) // wait min time see datasheet
 
 	// byte 2
@@ -137,7 +137,7 @@ func (ra *RAEncoder) WriteRead(b1 byte, b2 byte) (r1, r2 byte) {
 	time.Sleep(time.Microsecond * 3) // wait min time see datasheet
 
 	// de-select RA channel
-	ra.cs.High()
+	raEncoder.cs.High()
 
 	return r1, r2
 

@@ -41,9 +41,9 @@ func main() {
 	uartUpTxPin = machine.UART0_TX_PIN
 	uartUpRxPin = machine.UART0_RX_PIN
 
-	// Note if UART1 was use it would be used here, however
-	// For now the RA-Driver is not using UART1,
-	// I might make the RA-Driver the end of the conga line and so UART1 would not be needed
+	uartDn = machine.UART1
+	uartDnTxPin = machine.GP4
+	uartDnRxPin = machine.GP5
 
 	mb, err := msg.NewBroker(
 		uartUp,
@@ -100,8 +100,13 @@ func main() {
 	var raPWM driver.PWM
 	raPWM = machine.PWM4
 
+	// DEVTODO - combine the two
 	raDirection := false
 	raDirectionPin := machine.GP8
+
+	// DEVTODO - combine the two
+	raEnableMotor := true
+	raEnableMotorPin := machine.GP13
 
 	raStep := machine.GP9
 	var raStepsPerRevolution int32 = 400
@@ -111,10 +116,8 @@ func main() {
 	var raGearRatio int32 = 3
 	raMicroStep1 := machine.GP12
 	raMicroStep2 := machine.GP11
-	raMicroStep3 := machine.GP10
 	raEncoderSPI := *machine.SPI0
 	raEncoderCS := machine.GP20
-
 	ra, _ := driver.NewRADriver(
 		raStep,
 		raPWM,
@@ -124,8 +127,9 @@ func main() {
 		raMaxHz,
 		raMicroStep1,
 		raMicroStep2,
-		raMicroStep3,
 		raMaxMicroStepSetting,
+		raEnableMotor,
+		raEnableMotorPin,
 		raWormRatio,
 		raGearRatio,
 		raEncoderSPI,
@@ -210,7 +214,7 @@ func runLight() {
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	// blink run light for a bit seconds so I can tell it is starting
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 50; i++ {
 		led.High()
 		time.Sleep(time.Millisecond * 100)
 		led.Low()

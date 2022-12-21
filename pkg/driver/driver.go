@@ -47,6 +47,11 @@ type RADriver struct {
 	// The pin that controls the direction of the motor rotation
 	directionPin machine.Pin
 
+	// Enable or disable the motor
+	enableMotor bool
+	// The pin that controls the enabling or disabling of the motor
+	enableMotorPin machine.Pin
+
 	// The steps need for one full revolution of the motor
 	// For example a 1.8° motor takes 200 steps per revolution, a 0.9° motor takes 400 steps per revolution, etc...
 	// This is a physical properity of the motor and should NOT account for micro stepping
@@ -60,22 +65,21 @@ type RADriver struct {
 
 	// Microstep Pins
 	//
-	//  ms1  ms2  ms3  Steps
-	//  ---  ---  ---  ------------------------
-	//   L    L    L   Full
-	//   H    L    L   Half
-	//   L    H    L   Quarter
-	//   H    H    H   Sixteenth
+	//  ms1  ms2  Steps       Interpolation
+	//  ---  ---  ----------- -------------
+	//   H    L   1/2         1/256
+	//   L    H   1/4         1/256
+	//   L    L   1/8         1/256
+	//   H    H   1/16        1/256
 	//
 	microStep1 machine.Pin
 	microStep2 machine.Pin
-	microStep3 machine.Pin
 
 	// The micro stepping setting full, half, quarter, etc...
-	// Use 1 for full, 2 for half, 4 for quarter etc...
+	// Use 2 for half, 4 for quarter etc...
 	microStepSetting MicroStep
 
-	// The limit or "highest" setting, 1 is the "lowest"
+	// The limit or "highest" setting, probably 16
 	maxMicroStepSetting MicroStep
 
 	// The gear ratios of your RA mount
@@ -105,8 +109,9 @@ func NewRADriver(
 	maxHz int32,
 	microStep1 machine.Pin,
 	microStep2 machine.Pin,
-	microStep3 machine.Pin,
 	maxMicroStepSetting MicroStep,
+	enableMotor bool,
+	enableMotorPin machine.Pin,
 	wormRatio int32,
 	gearRatio int32,
 	encoderSPI machine.SPI,
@@ -114,8 +119,8 @@ func NewRADriver(
 
 ) (RADriver, error) {
 
-	if maxMicroStepSetting != 1 && maxMicroStepSetting != 2 && maxMicroStepSetting != 4 && maxMicroStepSetting != 8 && maxMicroStepSetting != 16 {
-		return RADriver{}, errors.New("maxMicroStepSetting must be 1, 2, 4, 8 or 16")
+	if maxMicroStepSetting != 2 && maxMicroStepSetting != 4 && maxMicroStepSetting != 8 && maxMicroStepSetting != 16 {
+		return RADriver{}, errors.New("maxMicroStepSetting must be 2, 4, 8 or 16")
 	}
 
 	if stepsPerRevolution < 1 {
@@ -142,9 +147,10 @@ func NewRADriver(
 		runningHz:           0,
 		microStep1:          microStep1,
 		microStep2:          microStep2,
-		microStep3:          microStep3,
 		microStepSetting:    maxMicroStepSetting,
 		maxMicroStepSetting: maxMicroStepSetting,
+		enableMotor:         enableMotor,
+		enableMotorPin:      enableMotorPin,
 		wormRatio:           wormRatio,
 		gearRatio:           gearRatio,
 		encoder:             encoder,
@@ -167,17 +173,21 @@ func (ra *RADriver) Configure() {
 	//
 	microStep1 := ra.microStep1
 	microStep2 := ra.microStep2
-	microStep3 := ra.microStep3
 	microStep1.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	microStep2.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	microStep3.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	// Default to microStepSetting of 16
 	ra.setMicroStepSetting(16)
 
+	// DEVTODO - combine the two
 	// Direction
 	ra.directionPin.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	ra.SetDirection(ra.direction)
+
+	// DEVTODO - combine the two
+	// Enable Motor
+	ra.enableMotorPin.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	ra.SetEnableMotor(ra.enableMotor)
 
 	// RA Encoder
 	ra.encoder.Configure()
@@ -196,44 +206,34 @@ func (ra *RADriver) setMicroStepSetting(ms MicroStep) {
 
 	ra.microStepSetting = ms
 
-	//  ms1  ms2  ms3  Steps
-	//  ---  ---  ---  ------------------------
-	//   L    L    L   Full
-	//   H    L    L   Half
-	//   L    H    L   Quarter
-	//   H    H    H   Sixteenth
+	//  ms1  ms2  Steps       Interpolation
+	//  ---  ---  ----------- -------------
+	//   H    L   1/2         1/256
+	//   L    H   1/4         1/256
+	//   L    L   1/8         1/256
+	//   H    H   1/16        1/256
 
 	switch ra.microStepSetting {
-	case 1:
-		ra.microStep1.Low()
-		ra.microStep2.Low()
-		ra.microStep3.Low()
-		fmt.Println("[setMicroStepSetting] microStepSetting 1-L L L")
 	case 2:
 		ra.microStep1.High()
 		ra.microStep2.Low()
-		ra.microStep3.Low()
-		fmt.Println("[setMicroStepSetting] microStepSetting 2-H L L")
+		fmt.Println("[setMicroStepSetting] microStepSetting 2-H L")
 	case 4:
 		ra.microStep1.Low()
 		ra.microStep2.High()
-		ra.microStep3.Low()
-		fmt.Println("[setMicroStepSetting] microStepSetting 4-L H L")
+		fmt.Println("[setMicroStepSetting] microStepSetting 4-L H")
 	case 8:
-		ra.microStep1.High()
-		ra.microStep2.High()
-		ra.microStep3.Low()
-		fmt.Println("[setMicroStepSetting] microStepSetting 8-H H L")
+		ra.microStep1.Low()
+		ra.microStep2.Low()
+		fmt.Println("[setMicroStepSetting] microStepSetting 8-H H")
 	case 16:
 		ra.microStep1.High()
 		ra.microStep2.High()
-		ra.microStep3.High()
-		fmt.Println("[setMicroStepSetting] microStepSetting 16-H H H")
+		fmt.Println("[setMicroStepSetting] microStepSetting 16-H H")
 	default:
 		ra.microStep1.High()
 		ra.microStep2.High()
-		ra.microStep3.High()
-		fmt.Println("[setMicroStepSetting] microStepSetting default-H H H")
+		fmt.Println("[setMicroStepSetting] microStepSetting default 16-H H")
 	}
 
 }
@@ -253,8 +253,7 @@ func (ra *RADriver) setMicroStepSetting(ms MicroStep) {
 //	 The cycle perod = 1e9 / Hz
 func (ra *RADriver) RunAtSiderealRate() {
 
-	// systemRatio := ra.stepsPerRevolution * ra.maxMicroStepSetting * ra.wormRatio * ra.gearRatio
-	systemRatio := ra.stepsPerRevolution * int32(1) * ra.wormRatio * ra.gearRatio //DEVTODO - try some hard code
+	systemRatio := ra.stepsPerRevolution * int32(ra.maxMicroStepSetting) * ra.wormRatio * ra.gearRatio
 	sideralHz := float64(systemRatio) / SIDEREAL_DAY_IN_SECONDS
 
 	ra.RunAtHz(sideralHz)
@@ -302,6 +301,18 @@ func (ra *RADriver) SetDirection(direction bool) {
 		ra.directionPin.High()
 	} else {
 		ra.directionPin.Low()
+	}
+
+}
+
+func (ra *RADriver) SetEnableMotor(enable bool) {
+
+	ra.enableMotor = enable
+
+	if enable {
+		ra.enableMotorPin.Low() // Enabled if pin is low
+	} else {
+		ra.enableMotorPin.High()
 	}
 
 }
