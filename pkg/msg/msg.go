@@ -33,8 +33,8 @@ const (
 	RA_CMD_INFO          RADriverCmd = "INFO"
 	RA_CMD_SET_DIR_NORTH RADriverCmd = "SetDirNorth"
 	RA_CMD_SET_DIR_SOUTH RADriverCmd = "SetDirSouth"
-	RA_CMD_TRACKING_ON RADriverCmd = "SetTrackingOn"
-	RA_CMD_TRACKING_OFF RADriverCmd = "SetTrackingOff"
+	RA_CMD_TRACKING_ON   RADriverCmd = "SetTrackingOn"
+	RA_CMD_TRACKING_OFF  RADriverCmd = "SetTrackingOff"
 )
 
 // Foo message use for testing I will delete it eventually
@@ -63,10 +63,11 @@ type HandsetMsg struct {
 //
 // ^RADriver|SetDirNorth~
 // ^RADriver|SetDirSouth~
-// ^RADriver|INFO|North|12345~
+// ^RADriver|INFO|true|North|12345~
 type RADriverMsg struct {
 	Kind      MsgType
 	Cmd       RADriverCmd
+	Tracking  bool
 	Direction driver.RaDirection
 	Position  uint32
 }
@@ -315,6 +316,7 @@ func (mb *MsgBroker) PublishRADriver(raDriverMsg RADriverMsg) {
 
 	msgStr := "^" + string(raDriverMsg.Kind)
 	msgStr = msgStr + "|" + fmt.Sprintf("%v", raDriverMsg.Cmd)
+	msgStr = msgStr + "|" + fmt.Sprintf("%v", raDriverMsg.Tracking)
 	msgStr = msgStr + "|" + fmt.Sprintf("%v", raDriverMsg.Direction)
 	msgStr = msgStr + "|" + fmt.Sprintf("%v", raDriverMsg.Position) + "~"
 
@@ -430,9 +432,12 @@ func unmarshallRADriver(msgParts []string) *RADriverMsg {
 			raDriverMsg.Direction = driver.RA_DIR_SOUTH
 		}
 	}
-
 	if len(msgParts) > 3 {
-		p, _ := strconv.Atoi(msgParts[3])
+		raDriverMsg.Direction = driver.RaDirection(msgParts[3])
+	}
+
+	if len(msgParts) > 4 {
+		p, _ := strconv.Atoi(msgParts[4])
 		raDriverMsg.Position = uint32(p)
 	}
 

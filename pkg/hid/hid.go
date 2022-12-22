@@ -28,8 +28,8 @@ type State uint8
 const (
 	FIRST State = iota
 	SHOW_VERSION
-	SET_RA_DIRECTION
 	SET_RA_TRACKING
+	SET_RA_DIRECTION
 	SET_DATE
 	SET_TIME
 	SET_LATITUDE
@@ -144,13 +144,16 @@ type Handset struct {
 
 // The Screen properties are used to determine what is written to the display
 type Screen struct {
-	displayDevice *ssd1351.Device
-	font          *tinyfont.Font
-	fontColor     color.RGBA
-	statusBarText string
-	BodyText      string
-	Direction     driver.RaDirection
-	Position      uint32
+	displayDevice     *ssd1351.Device
+	font              *tinyfont.Font
+	fontColor         color.RGBA
+	statusBarText     string
+	BodyText          string
+	prevStatusBarText string
+	PrevBodyText      string
+	Tracking          bool
+	Direction         driver.RaDirection
+	Position          uint32
 }
 
 // Returns a new Handset
@@ -422,18 +425,6 @@ func (hs *Handset) StateMachine(key Key) string {
 		hs.isSetup = false
 		doNav(key, &hs.state)
 
-	case SET_RA_DIRECTION:
-
-		if !doNav(key, &hs.state) {
-			if key == KEY_ONE {
-				hs.msgBroker.PublishRACmdSetDir(driver.RA_DIR_NORTH)
-				hs.state++
-			} else if key == KEY_TWO {
-				hs.msgBroker.PublishRACmdSetDir(driver.RA_DIR_SOUTH)
-				hs.state++
-			}
-		}
-		
 	case SET_RA_TRACKING:
 
 		if !doNav(key, &hs.state) {
@@ -442,6 +433,18 @@ func (hs *Handset) StateMachine(key Key) string {
 				hs.state++
 			} else if key == KEY_TWO {
 				hs.msgBroker.PublishRACmdSetTracking(false)
+				hs.state++
+			}
+		}
+
+	case SET_RA_DIRECTION:
+
+		if !doNav(key, &hs.state) {
+			if key == KEY_ONE {
+				hs.msgBroker.PublishRACmdSetDir(driver.RA_DIR_NORTH)
+				hs.state++
+			} else if key == KEY_TWO {
+				hs.msgBroker.PublishRACmdSetDir(driver.RA_DIR_SOUTH)
 				hs.state++
 			}
 		}
@@ -643,11 +646,11 @@ func (hs *Handset) StateMachine(key Key) string {
 	case SHOW_VERSION:
 		hs.dspOut = "VERSION\n" + VERSION
 
-	case SET_RA_DIRECTION:
-		hs.dspOut = "RA Dir\n1 - North\n2 - South\n" + string(hs.Screen.Direction)
-
 	case SET_RA_TRACKING:
 		hs.dspOut = "RA Tracking\n1 - On\n2 - Off\n" + string(hs.Screen.Direction) // DEVTODO show enable/disable flag
+
+	case SET_RA_DIRECTION:
+		hs.dspOut = "RA Dir\n1 - North\n2 - South\n" + string(hs.Screen.Direction)
 
 	case SET_DATE:
 		hs.dspOut = "Set Date\nYYYY-MM-DD\n-----------\n" + hs.currentDateStr
@@ -691,17 +694,35 @@ func (hs *Handset) RenderScreen() {
 
 	status := [10]byte{' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '}
 
-	// DEVTODO - try to do better than clearing the screen each time
-	hs.Screen.displayDevice.FillScreen(color.RGBA{0, 0, 0, 0})
+
 
 	// Compute the status bar text
-	status[0] = 'S'
-	if hs.Screen.Direction == driver.RA_DIR_NORTH {
-		status[0] = 'N'
+	status[0] = '0'
+	if hs.Screen.Tracking {
+		status[1] = '1'
 	}
+
+	status[1] = 'S'
+	if hs.Screen.Direction == driver.RA_DIR_NORTH {
+		status[1] = 'N'
+	}
+
 	statusText := fmt.Sprintf("%s\n-----------", status)
+	hs.Screen.prevStatusBarText = hs.Screen.statusBarText
 	hs.Screen.statusBarText = statusText
 
+	
+	fmt.Printf("statusBarText\nprev-------------------\n%v\ncurrent-------------------\n%v\n", hs.Screen.prevStatusBarText, hs.Screen.statusBarText)
+	fmt.Printf("BodyText\nprev-------------------\n%v\ncurrent-------------------\n%v\n", hs.Screen.PrevBodyText, hs.Screen.BodyText)
+
+	// If no change then get out! Don't make the screen flicker
+	if hs.Screen.statusBarText == hs.Screen.prevStatusBarText && hs.Screen.BodyText == hs.Screen.PrevBodyText {
+		return
+	}
+
+	// DEVTODO - try to do better than clearing the screen each time
+	hs.Screen.displayDevice.FillScreen(color.RGBA{0, 0, 0, 0})
+	
 	// Status Bar
 	tinyfont.WriteLine(
 		hs.Screen.displayDevice,
@@ -710,8 +731,6 @@ func (hs *Handset) RenderScreen() {
 		statusText,
 		hs.Screen.fontColor)
 
-	// hs.Screen.displayDevice.DrawFastHLine(5,5,150,hs.Screen.fontColor)
-
 	// Body
 	tinyfont.WriteLine(
 		hs.Screen.displayDevice,
@@ -719,6 +738,9 @@ func (hs *Handset) RenderScreen() {
 		3, 45,
 		hs.Screen.BodyText,
 		hs.Screen.fontColor)
+
+		
+		hs.Screen.PrevBodyText = hs.Screen.BodyText
 }
 
 // Util functions

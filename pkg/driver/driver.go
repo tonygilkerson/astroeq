@@ -29,7 +29,6 @@ const (
 	RA_DIR_SOUTH RaDirection = "South"
 )
 
-
 const SIDEREAL_DAY_IN_SECONDS = 86_164.1
 
 type PWM interface {
@@ -50,13 +49,9 @@ type RADriver struct {
 	// raPWM
 	pwm PWM
 
-	// Used to control the direction
-	direction bool
 	// The pin that controls the direction of the motor rotation
 	directionPin machine.Pin
 
-	// Enable or disable the motor
-	enableMotor bool
 	// The pin that controls the enabling or disabling of the motor
 	enableMotorPin machine.Pin
 
@@ -190,7 +185,7 @@ func (ra *RADriver) Configure() {
 
 	// Enable Motor
 	ra.enableMotorPin.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	ra.SetEnableMotor(ra.enableMotor)
+	ra.SetTracking(false)
 
 	// RA Encoder
 	ra.encoder.Configure()
@@ -288,6 +283,21 @@ func (ra *RADriver) monitorPositionRoutine() {
 	}
 }
 
+func (ra *RADriver) SetTracking(enable bool) {
+
+	if enable {
+		ra.enableMotorPin.Low() // Enabled if pin is low
+	} else {
+		ra.enableMotorPin.High()
+	}
+
+}
+
+func (ra *RADriver) GetTracking() bool {
+	// Enabled if pin is low, so if low return true
+	return !ra.enableMotorPin.Get()
+}
+
 func (ra *RADriver) GetPosition() uint32 {
 	return ra.position
 }
@@ -306,18 +316,6 @@ func (ra *RADriver) SetDirection(direction RaDirection) {
 		ra.directionPin.High()
 	} else {
 		ra.directionPin.Low()
-	}
-
-}
-
-func (ra *RADriver) SetEnableMotor(enable bool) {
-
-	ra.enableMotor = enable
-
-	if enable {
-		ra.enableMotorPin.Low() // Enabled if pin is low
-	} else {
-		ra.enableMotorPin.High()
 	}
 
 }

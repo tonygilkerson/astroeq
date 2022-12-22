@@ -245,12 +245,12 @@ func raDriverCtl(raMsg msg.RADriverMsg, ra *driver.RADriver) {
 
 	case msg.RA_CMD_SET_DIR_SOUTH:
 		ra.SetDirection(driver.RA_DIR_SOUTH)
-	
+
 	case msg.RA_CMD_TRACKING_ON:
-		ra.SetEnableMotor(true)
-	
+		ra.SetTracking(true)
+
 	case msg.RA_CMD_TRACKING_OFF:
-		ra.SetEnableMotor(false)
+		ra.SetTracking(false)
 	}
 }
 
@@ -260,6 +260,7 @@ func raBroadcastInfoRoutine(ra *driver.RADriver, mb *msg.MsgBroker) {
 		var raMsg msg.RADriverMsg
 		raMsg.Kind = msg.MSG_RADRIVER
 		raMsg.Cmd = msg.RA_CMD_INFO
+		raMsg.Tracking = ra.GetTracking()
 		raMsg.Direction = ra.GetDirection()
 		raMsg.Position = ra.GetPosition()
 

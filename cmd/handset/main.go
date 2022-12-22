@@ -112,6 +112,7 @@ func main() {
 
 	//
 	// Start the subscription reader, it will read from the the UARTS
+	// and dispatch to the proper channel
 	//
 	go mb.SubscriptionReaderRoutine()
 
@@ -253,11 +254,14 @@ func handsetStateMachineRoutine(hs *hid.Handset, keyStrokesCh chan hid.Key, mb *
 	var noKey hid.Key
 
 	hs.Screen.BodyText = hs.StateMachine(noKey)
+	hs.Screen.PrevBodyText = ""
 
 	hs.RenderScreen()
 
 	for k := range keyStrokesCh {
 
+		// DEVTODO - create a SetBodyText that set the prev for you, hide this crap
+		hs.Screen.PrevBodyText = hs.Screen.BodyText
 		hs.Screen.BodyText = hs.StateMachine(k)
 		hs.RenderScreen()
 
@@ -274,17 +278,18 @@ func fooConsumerRoutine(ch chan msg.FooMsg, mb *msg.MsgBroker) {
 
 func raDriverConsumerRoutine(hs *hid.Handset, ch chan msg.RADriverMsg, mb *msg.MsgBroker) {
 
-	for raDriver := range ch {
-		fmt.Printf("[handset.raDriverConsumerRoutine] - Kind: [%s], Cmd: [%s]\n", raDriver.Kind, raDriver.Cmd)
-		fmt.Printf("[handset.raDriverConsumerRoutine] - msg: [%v]\n", raDriver)
+	for raMsg := range ch {
+		fmt.Printf("[handset.raDriverConsumerRoutine] - Kind: [%s], Cmd: [%s]\n", raMsg.Kind, raMsg.Cmd)
+		fmt.Printf("[handset.raDriverConsumerRoutine] - msg: [%v]\n", raMsg)
 
 		// We are only interested in raDriver info messages
-		if raDriver.Cmd != msg.RA_CMD_INFO {
+		if raMsg.Cmd != msg.RA_CMD_INFO {
 			continue
 		}
 
-		hs.Screen.Direction = raDriver.Direction
-		hs.Screen.Position = raDriver.Position
+		hs.Screen.Tracking = raMsg.Tracking
+		hs.Screen.Direction = raMsg.Direction
+		hs.Screen.Position = raMsg.Position
 
 		// DEVTODO - make this a render status not the entire screen
 		hs.RenderScreen()
