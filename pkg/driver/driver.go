@@ -15,12 +15,20 @@ type MicroStep uint16
 
 // Microstep settings
 const (
-	FULL      MicroStep = 1
-	HALF      MicroStep = 2
-	QUARTER   MicroStep = 4
-	EIGHTH    MicroStep = 8
-	SIXTEENTH MicroStep = 16
+	MS_FULL      MicroStep = 1
+	MS_HALF      MicroStep = 2
+	MS_QUARTER   MicroStep = 4
+	MS_EIGHTH    MicroStep = 8
+	MS_SIXTEENTH MicroStep = 16
 )
+
+type RaDirection string
+
+const (
+	RA_DIR_NORTH RaDirection = "North"
+	RA_DIR_SOUTH RaDirection = "South"
+)
+
 
 const SIDEREAL_DAY_IN_SECONDS = 86_164.1
 
@@ -103,14 +111,12 @@ type RADriver struct {
 func NewRADriver(
 	stepPin machine.Pin,
 	pwm PWM,
-	direction bool,
 	directionPin machine.Pin,
 	stepsPerRevolution int32,
 	maxHz int32,
 	microStep1 machine.Pin,
 	microStep2 machine.Pin,
 	maxMicroStepSetting MicroStep,
-	enableMotor bool,
 	enableMotorPin machine.Pin,
 	wormRatio int32,
 	gearRatio int32,
@@ -119,6 +125,7 @@ func NewRADriver(
 
 ) (RADriver, error) {
 
+	// DEVTODO use constants
 	if maxMicroStepSetting != 2 && maxMicroStepSetting != 4 && maxMicroStepSetting != 8 && maxMicroStepSetting != 16 {
 		return RADriver{}, errors.New("maxMicroStepSetting must be 2, 4, 8 or 16")
 	}
@@ -140,7 +147,6 @@ func NewRADriver(
 	return RADriver{
 		stepPin:             stepPin,
 		pwm:                 pwm,
-		direction:           direction,
 		directionPin:        directionPin,
 		stepsPerRevolution:  stepsPerRevolution,
 		maxHz:               maxHz,
@@ -149,7 +155,6 @@ func NewRADriver(
 		microStep2:          microStep2,
 		microStepSetting:    maxMicroStepSetting,
 		maxMicroStepSetting: maxMicroStepSetting,
-		enableMotor:         enableMotor,
 		enableMotorPin:      enableMotorPin,
 		wormRatio:           wormRatio,
 		gearRatio:           gearRatio,
@@ -177,14 +182,12 @@ func (ra *RADriver) Configure() {
 	microStep2.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	// Default to microStepSetting of 16
-	ra.setMicroStepSetting(16)
+	ra.setMicroStepSetting(MS_SIXTEENTH)
 
-	// DEVTODO - combine the two
 	// Direction
 	ra.directionPin.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	ra.SetDirection(ra.direction)
+	ra.SetDirection(RA_DIR_NORTH)
 
-	// DEVTODO - combine the two
 	// Enable Motor
 	ra.enableMotorPin.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	ra.SetEnableMotor(ra.enableMotor)
@@ -289,15 +292,17 @@ func (ra *RADriver) GetPosition() uint32 {
 	return ra.position
 }
 
-func (ra *RADriver) GetDirection() bool {
-	return ra.direction
+func (ra *RADriver) GetDirection() RaDirection {
+	if ra.directionPin.Get() {
+		return RA_DIR_NORTH
+	} else {
+		return RA_DIR_SOUTH
+	}
 }
 
-func (ra *RADriver) SetDirection(direction bool) {
+func (ra *RADriver) SetDirection(direction RaDirection) {
 
-	ra.direction = direction
-
-	if direction {
+	if direction == RA_DIR_NORTH {
 		ra.directionPin.High()
 	} else {
 		ra.directionPin.Low()

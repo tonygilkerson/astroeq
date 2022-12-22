@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/tonygilkerson/astroeq/pkg/driver"
 )
 
 // Define message types
@@ -31,6 +33,8 @@ const (
 	RA_CMD_INFO          RADriverCmd = "INFO"
 	RA_CMD_SET_DIR_NORTH RADriverCmd = "SetDirNorth"
 	RA_CMD_SET_DIR_SOUTH RADriverCmd = "SetDirSouth"
+	RA_CMD_TRACKING_ON RADriverCmd = "SetTrackingOn"
+	RA_CMD_TRACKING_OFF RADriverCmd = "SetTrackingOff"
 )
 
 // Foo message use for testing I will delete it eventually
@@ -52,15 +56,18 @@ type HandsetMsg struct {
 	Keys []string
 }
 
+// DEVTODO - Creat RADriverMsg and RADriverCmd
+// DEVTODO - combine SetDirNorth and SetDirSouth into SetDirection and have it take as a parm driver.RA_DIR_NORTH
 // RA Driver message used for sending commands to the RA Driver and for publishing it current status
 // The following are sample messages
 //
-// ^RADriver|SetDirNorth|true|12345~
-// ^RADriver|INFO|true|12345~
+// ^RADriver|SetDirNorth~
+// ^RADriver|SetDirSouth~
+// ^RADriver|INFO|North|12345~
 type RADriverMsg struct {
 	Kind      MsgType
 	Cmd       RADriverCmd
-	Direction bool
+	Direction driver.RaDirection
 	Position  uint32
 }
 
@@ -197,42 +204,42 @@ func (mb *MsgBroker) SubscriptionReaderRoutine() {
 			// At this point we have an entire message, so dispatch it!
 			//
 			msgParts := strings.Split(string(message[:]), "|")
-			mb.DispatchMessage(msgParts)
+			mb.DispatchMsgToChannel(msgParts)
 
 		}
 	}
 }
 
-func (mb *MsgBroker) DispatchMessage(msgParts []string) {
+func (mb *MsgBroker) DispatchMsgToChannel(msgParts []string) {
 
 	switch msgParts[0] {
 
 	case string(MSG_FOO):
-		fmt.Printf("[DispatchMessage] - %v\n", MSG_FOO)
+		fmt.Printf("[DispatchMsgToChannel] - %v\n", MSG_FOO)
 		msg := unmarshallFoo(msgParts)
 		if mb.fooCh != nil {
 			mb.fooCh <- *msg
 		}
 	case string(MSG_LOG):
-		fmt.Printf("[DispatchMessage] - %v\n", MSG_LOG)
+		fmt.Printf("[DispatchMsgToChannel] - %v\n", MSG_LOG)
 		msg := unmarshallLog(msgParts)
 		if mb.logCh != nil {
 			mb.logCh <- *msg
 		}
 	case string(MSG_HANDSET):
-		fmt.Printf("[DispatchMessage] - %v\n", MSG_HANDSET)
+		fmt.Printf("[DispatchMsgToChannel] - %v\n", MSG_HANDSET)
 		msg := unmarshallHandset(msgParts)
 		if mb.handsetCh != nil {
 			mb.handsetCh <- *msg
 		}
 	case string(MSG_RADRIVER):
-		fmt.Printf("[DispatchMessage] - %v\n", MSG_RADRIVER)
+		fmt.Printf("[DispatchMsgToChannel] - %v\n", MSG_RADRIVER)
 		msg := unmarshallRADriver(msgParts)
 		if mb.raDriverCh != nil {
 			mb.raDriverCh <- *msg
 		}
 	default:
-		fmt.Println("[DispatchMessage] - no match found")
+		fmt.Println("[DispatchMsgToChannel] - no match found")
 	}
 
 }
@@ -290,24 +297,53 @@ func (mb *MsgBroker) PublishLog(log LogMsg) {
 	mb.PublishMsg(msgStr)
 
 }
-func (mb *MsgBroker) PublishHandset(handsetMsg HandsetMsg) {
 
-	msgStr := "^" + string(handsetMsg.Kind)
+// DEVTODO - I delete PublishHandset soon
+// func (mb *MsgBroker) PublishHandset(handsetMsg HandsetMsg) {
 
-	for _, key := range handsetMsg.Keys {
-		msgStr = msgStr + "|" + key
-	}
-	msgStr = msgStr + "~"
+// 	msgStr := "^" + string(handsetMsg.Kind)
 
-	mb.PublishMsg(msgStr)
+// 	for _, key := range handsetMsg.Keys {
+// 		msgStr = msgStr + "|" + key
+// 	}
+// 	msgStr = msgStr + "~"
 
-}
+// 	mb.PublishMsg(msgStr)
+
+// }
 func (mb *MsgBroker) PublishRADriver(raDriverMsg RADriverMsg) {
 
 	msgStr := "^" + string(raDriverMsg.Kind)
 	msgStr = msgStr + "|" + fmt.Sprintf("%v", raDriverMsg.Cmd)
 	msgStr = msgStr + "|" + fmt.Sprintf("%v", raDriverMsg.Direction)
 	msgStr = msgStr + "|" + fmt.Sprintf("%v", raDriverMsg.Position) + "~"
+
+	mb.PublishMsg(msgStr)
+
+}
+
+func (mb *MsgBroker) PublishRACmdSetDir(direction driver.RaDirection) {
+
+	msgStr := "^" + string(MSG_RADRIVER)
+	if direction == driver.RA_DIR_NORTH {
+		msgStr = msgStr + "|" + string(RA_CMD_SET_DIR_NORTH)
+		msgStr = msgStr + "|" + string(driver.RA_DIR_NORTH) + "~"
+	} else {
+		msgStr = msgStr + "|" + string(RA_CMD_SET_DIR_SOUTH)
+		msgStr = msgStr + "|" + string(driver.RA_DIR_SOUTH) + "~"
+	}
+
+	mb.PublishMsg(msgStr)
+
+}
+func (mb *MsgBroker) PublishRACmdSetTracking(tracking bool) {
+
+	msgStr := "^" + string(MSG_RADRIVER)
+	if tracking {
+		msgStr = msgStr + "|" + string(RA_CMD_TRACKING_ON) + "~"
+	} else {
+		msgStr = msgStr + "|" + string(RA_CMD_TRACKING_OFF) + "~"
+	}
 
 	mb.PublishMsg(msgStr)
 
@@ -388,10 +424,10 @@ func unmarshallRADriver(msgParts []string) *RADriverMsg {
 	}
 
 	if len(msgParts) > 2 {
-		if RADriverCmd(msgParts[2]) == "true" {
-			raDriverMsg.Direction = true
+		if RADriverCmd(msgParts[2]) == "North" {
+			raDriverMsg.Direction = driver.RA_DIR_NORTH
 		} else {
-			raDriverMsg.Direction = false
+			raDriverMsg.Direction = driver.RA_DIR_SOUTH
 		}
 	}
 

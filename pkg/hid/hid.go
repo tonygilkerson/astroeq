@@ -10,6 +10,9 @@ import (
 	"tinygo.org/x/drivers/ssd1351"
 	"tinygo.org/x/tinyfont"
 	"tinygo.org/x/tinyfont/freemono"
+
+	"github.com/tonygilkerson/astroeq/pkg/driver"
+	"github.com/tonygilkerson/astroeq/pkg/msg"
 )
 
 const VERSION string = "v0-alpha4"
@@ -25,6 +28,8 @@ type State uint8
 const (
 	FIRST State = iota
 	SHOW_VERSION
+	SET_RA_DIRECTION
+	SET_RA_TRACKING
 	SET_DATE
 	SET_TIME
 	SET_LATITUDE
@@ -41,29 +46,29 @@ const (
 type Key uint8
 
 const (
-	UNDEFINED_KEY Key = iota
-	ZERO_KEY
-	ONE_KEY
-	TWO_KEY
-	THREE_KEY
-	FOUR_KEY
-	FIVE_KEY
-	SIX_KEY
-	SEVEN_KEY
-	EIGHT_KEY
-	NINE_KEY
+	KEY_UNDEFINED Key = iota
+	KEY_ZERO
+	KEY_ONE
+	KEY_TWO
+	KEY_THREE
+	KEY_FOUR
+	KEY_FIVE
+	KEY_SIX
+	KEY_SEVEN
+	KEY_EIGHT
+	KEY_NINE
 
-	SCROLL_DN_KEY
-	SCROLL_UP_KEY
+	KEY_SCROLL_DN
+	KEY_SCROLL_UP
 
-	RIGHT_KEY
-	LEFT_KEY
-	UP_KEY
-	DOWN_KEY
+	KEY_RIGHT
+	KEY_LEFT
+	KEY_UP
+	KEY_DOWN
 
-	ESC_KEY
-	SETUP_KEY
-	ENTER_KEY
+	KEY_ESC
+	KEY_SETUP
+	KEY_ENTER
 )
 
 // The Handset properties are maintained by the user via the handset.
@@ -71,11 +76,12 @@ const (
 // use them in commands sent over the message bus.
 type Handset struct {
 	Screen       *Screen
+	msgBroker    *msg.MsgBroker
 	isSetup      bool
 	state        State
 	scrollDnKey  machine.Pin
 	zeroKey      machine.Pin
-	scrollUP_KEY machine.Pin
+	scrollKEY_UP machine.Pin
 
 	sevenKey machine.Pin
 	eightKey machine.Pin
@@ -143,13 +149,14 @@ type Screen struct {
 	fontColor     color.RGBA
 	statusBarText string
 	BodyText      string
-	Direction     bool
+	Direction     driver.RaDirection
 	Position      uint32
 }
 
 // Returns a new Handset
 func NewHandset(
 	displayDevice *ssd1351.Device,
+	msgBroker *msg.MsgBroker,
 	zeroKey machine.Pin,
 	oneKey machine.Pin,
 	twoKey machine.Pin,
@@ -162,7 +169,7 @@ func NewHandset(
 	nineKey machine.Pin,
 
 	scrollDnKey machine.Pin,
-	scrollUP_KEY machine.Pin,
+	scrollKEY_UP machine.Pin,
 
 	rightKey machine.Pin,
 	leftKey machine.Pin,
@@ -179,11 +186,12 @@ func NewHandset(
 
 	return Handset{
 		Screen:               &screen,
+		msgBroker:            msgBroker,
 		isSetup:              false,
 		state:                FIRST,
 		scrollDnKey:          scrollDnKey,
 		zeroKey:              zeroKey,
-		scrollUP_KEY:         scrollUP_KEY,
+		scrollKEY_UP:         scrollKEY_UP,
 		sevenKey:             sevenKey,
 		eightKey:             eightKey,
 		nineKey:              nineKey,
@@ -230,7 +238,7 @@ func (hs *Handset) Configure() chan Key {
 	//
 	hs.scrollDnKey.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
 	hs.zeroKey.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
-	hs.scrollUP_KEY.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
+	hs.scrollKEY_UP.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
 	hs.sevenKey.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
 	hs.eightKey.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
 	hs.nineKey.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
@@ -251,25 +259,25 @@ func (hs *Handset) Configure() chan Key {
 	//
 	// Register interrupts
 	//
-	hs.zeroKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = ZERO_KEY })
-	hs.oneKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = ONE_KEY })
-	hs.twoKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = TWO_KEY })
-	hs.threeKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = THREE_KEY })
-	hs.fourKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = FOUR_KEY })
-	hs.fiveKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = FIVE_KEY })
-	hs.sixKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = SIX_KEY })
-	hs.sevenKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = SEVEN_KEY })
-	hs.eightKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = EIGHT_KEY })
-	hs.nineKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = NINE_KEY })
-	hs.scrollUP_KEY.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = SCROLL_UP_KEY })
-	hs.scrollDnKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = SCROLL_DN_KEY })
-	hs.rightKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = RIGHT_KEY })
-	hs.leftKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = LEFT_KEY })
-	hs.upKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = UP_KEY })
-	hs.downKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = DOWN_KEY })
-	hs.escKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = ESC_KEY })
-	hs.setupKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = SETUP_KEY })
-	hs.enterKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = ENTER_KEY })
+	hs.zeroKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_ZERO })
+	hs.oneKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_ONE })
+	hs.twoKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_TWO })
+	hs.threeKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_THREE })
+	hs.fourKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_FOUR })
+	hs.fiveKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_FIVE })
+	hs.sixKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_SIX })
+	hs.sevenKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_SEVEN })
+	hs.eightKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_EIGHT })
+	hs.nineKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_NINE })
+	hs.scrollKEY_UP.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_SCROLL_UP })
+	hs.scrollDnKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_SCROLL_DN })
+	hs.rightKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_RIGHT })
+	hs.leftKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_LEFT })
+	hs.upKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_UP })
+	hs.downKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_DOWN })
+	hs.escKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_ESC })
+	hs.setupKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_SETUP })
+	hs.enterKey.SetInterrupt(machine.PinFalling, func(p machine.Pin) { hs.keyPressed = KEY_ENTER })
 
 	//
 	// Start go routine that will listen for key strokes and publish them on a channel
@@ -285,7 +293,7 @@ func (hs *Handset) publishKeysRoutine() {
 	for {
 
 		// If any key was pressed
-		if hs.keyPressed != UNDEFINED_KEY {
+		if hs.keyPressed != KEY_UNDEFINED {
 
 			//
 			//  After a small delay if the key pressed has not changed, consider it "pressed"
@@ -296,7 +304,7 @@ func (hs *Handset) publishKeysRoutine() {
 
 			if key == hs.keyPressed {
 				hs.keyStrokes <- hs.keyPressed
-				hs.keyPressed = UNDEFINED_KEY //reset for next key press
+				hs.keyPressed = KEY_UNDEFINED //reset for next key press
 			}
 		}
 		time.Sleep(time.Millisecond * 500)
@@ -308,43 +316,43 @@ func (hs *Handset) GetKeyString(k Key) string {
 
 	// fmt.Printf("[GetKeyString] value: %v \n", k)
 	switch k {
-	case ZERO_KEY:
+	case KEY_ZERO:
 		return "0"
-	case ONE_KEY:
+	case KEY_ONE:
 		return "1"
-	case TWO_KEY:
+	case KEY_TWO:
 		return "2"
-	case THREE_KEY:
+	case KEY_THREE:
 		return "3"
-	case FOUR_KEY:
+	case KEY_FOUR:
 		return "4"
-	case FIVE_KEY:
+	case KEY_FIVE:
 		return "5"
-	case SIX_KEY:
+	case KEY_SIX:
 		return "6"
-	case SEVEN_KEY:
+	case KEY_SEVEN:
 		return "7"
-	case EIGHT_KEY:
+	case KEY_EIGHT:
 		return "8"
-	case NINE_KEY:
+	case KEY_NINE:
 		return "9"
-	case SCROLL_DN_KEY:
+	case KEY_SCROLL_DN:
 		return "ScrollDn"
-	case SCROLL_UP_KEY:
+	case KEY_SCROLL_UP:
 		return "ScrollUp"
-	case RIGHT_KEY:
+	case KEY_RIGHT:
 		return "Right"
-	case LEFT_KEY:
+	case KEY_LEFT:
 		return "Left"
-	case UP_KEY:
+	case KEY_UP:
 		return "Up"
-	case DOWN_KEY:
+	case KEY_DOWN:
 		return "Down"
-	case ESC_KEY:
+	case KEY_ESC:
 		return "ESC"
-	case SETUP_KEY:
+	case KEY_SETUP:
 		return "Setup"
-	case ENTER_KEY:
+	case KEY_ENTER:
 		return "Enter"
 	default:
 		return "Undefined"
@@ -354,45 +362,45 @@ func (hs *Handset) GetKeyString(k Key) string {
 func (hs *Handset) GetKeyFromString(s string) Key {
 	switch s {
 	case "0":
-		return ZERO_KEY
+		return KEY_ZERO
 	case "1":
-		return ONE_KEY
+		return KEY_ONE
 	case "2":
-		return TWO_KEY
+		return KEY_TWO
 	case "3":
-		return THREE_KEY
+		return KEY_THREE
 	case "4":
-		return FOUR_KEY
+		return KEY_FOUR
 	case "5":
-		return FIVE_KEY
+		return KEY_FIVE
 	case "6":
-		return SIX_KEY
+		return KEY_SIX
 	case "7":
-		return SEVEN_KEY
+		return KEY_SEVEN
 	case "8":
-		return EIGHT_KEY
+		return KEY_EIGHT
 	case "9":
-		return NINE_KEY
+		return KEY_NINE
 	case "ScrollDn":
-		return SCROLL_DN_KEY
+		return KEY_SCROLL_DN
 	case "ScrollUp":
-		return SCROLL_UP_KEY
+		return KEY_SCROLL_UP
 	case "Right":
-		return RIGHT_KEY
+		return KEY_RIGHT
 	case "Left":
-		return LEFT_KEY
+		return KEY_LEFT
 	case "Up":
-		return UP_KEY
+		return KEY_UP
 	case "Down":
-		return DOWN_KEY
+		return KEY_DOWN
 	case "ESC":
-		return ESC_KEY
+		return KEY_ESC
 	case "Setup":
-		return SETUP_KEY
+		return KEY_SETUP
 	case "Enter":
-		return ENTER_KEY
+		return KEY_ENTER
 	default:
-		return UNDEFINED_KEY
+		return KEY_UNDEFINED
 	}
 }
 
@@ -402,11 +410,11 @@ func (hs *Handset) StateMachine(key Key) string {
 
 	case FIRST:
 
-		if key == ONE_KEY {
+		if key == KEY_ONE {
 			hs.state++
-		} else if key == TWO_KEY {
+		} else if key == KEY_TWO {
 			hs.state = UTILITY_MENU
-		} else if key == THREE_KEY {
+		} else if key == KEY_THREE {
 			hs.state = OBJECTS_MENU
 		}
 
@@ -414,9 +422,33 @@ func (hs *Handset) StateMachine(key Key) string {
 		hs.isSetup = false
 		doNav(key, &hs.state)
 
+	case SET_RA_DIRECTION:
+
+		if !doNav(key, &hs.state) {
+			if key == KEY_ONE {
+				hs.msgBroker.PublishRACmdSetDir(driver.RA_DIR_NORTH)
+				hs.state++
+			} else if key == KEY_TWO {
+				hs.msgBroker.PublishRACmdSetDir(driver.RA_DIR_SOUTH)
+				hs.state++
+			}
+		}
+		
+	case SET_RA_TRACKING:
+
+		if !doNav(key, &hs.state) {
+			if key == KEY_ONE {
+				hs.msgBroker.PublishRACmdSetTracking(true)
+				hs.state++
+			} else if key == KEY_TWO {
+				hs.msgBroker.PublishRACmdSetTracking(false)
+				hs.state++
+			}
+		}
+
 	case SET_DATE:
 
-		if key == ENTER_KEY {
+		if key == KEY_ENTER {
 			var err error
 			// RFC3339 example: "2006-01-02T15:04:05+05:00"
 			hs.currentTime, err = time.Parse(time.RFC3339, hs.currentDateStr+"T10:00:00+00:00")
@@ -429,7 +461,7 @@ func (hs *Handset) StateMachine(key Key) string {
 
 		} else if !doNav(key, &hs.state) {
 
-			if key == LEFT_KEY && len(hs.currentDateStr) > 0 {
+			if key == KEY_LEFT && len(hs.currentDateStr) > 0 {
 				hs.currentDateStr = hs.currentDateStr[:len(hs.currentDateStr)-1]
 
 			} else if len(hs.currentDateStr) == 4 && keyIsDigit(key) {
@@ -445,13 +477,13 @@ func (hs *Handset) StateMachine(key Key) string {
 		}
 
 	case SET_DATE_Error:
-		if key == ESC_KEY {
+		if key == KEY_ESC {
 			hs.state = SET_DATE
 		}
 
 	case SET_TIME:
 
-		if key == ENTER_KEY {
+		if key == KEY_ENTER {
 			var err error
 			// RFC3339 example: "2006-01-02T15:04:05+05:00"
 			hs.currentTime, err = time.Parse(time.RFC3339, hs.currentDateStr+"T"+hs.currentTimeStr+":00")
@@ -464,7 +496,7 @@ func (hs *Handset) StateMachine(key Key) string {
 
 		} else if !doNav(key, &hs.state) {
 
-			if key == LEFT_KEY && len(hs.currentTimeStr) > 0 {
+			if key == KEY_LEFT && len(hs.currentTimeStr) > 0 {
 				hs.currentTimeStr = hs.currentTimeStr[:len(hs.currentTimeStr)-1]
 
 			} else if len(hs.currentTimeStr) == 2 && keyIsDigit(key) {
@@ -475,9 +507,9 @@ func (hs *Handset) StateMachine(key Key) string {
 
 			} else if len(hs.currentTimeStr) == 8 {
 
-				if key == SCROLL_DN_KEY {
+				if key == KEY_SCROLL_DN {
 					hs.currentTimeStr = hs.currentTimeStr + "-"
-				} else if key == SCROLL_UP_KEY {
+				} else if key == KEY_SCROLL_UP {
 					hs.currentTimeStr = hs.currentTimeStr + "+"
 				}
 
@@ -488,7 +520,7 @@ func (hs *Handset) StateMachine(key Key) string {
 		}
 
 	case SET_TIME_MSG_ERROR:
-		if key == ESC_KEY {
+		if key == KEY_ESC {
 			hs.state = SET_TIME
 		}
 
@@ -496,7 +528,7 @@ func (hs *Handset) StateMachine(key Key) string {
 
 		if !doNav(key, &hs.state) {
 
-			if key == LEFT_KEY && len(hs.locationLatitudeStr) > 0 {
+			if key == KEY_LEFT && len(hs.locationLatitudeStr) > 0 {
 				hs.locationLatitudeStr = hs.locationLatitudeStr[:len(hs.locationLatitudeStr)-1]
 
 			} else if len(hs.locationLatitudeStr) == 3 && keyIsDigit(key) {
@@ -504,9 +536,9 @@ func (hs *Handset) StateMachine(key Key) string {
 
 			} else if len(hs.locationLatitudeStr) == 0 {
 
-				if key == SCROLL_DN_KEY {
+				if key == KEY_SCROLL_DN {
 					hs.locationLatitudeStr = "-"
-				} else if key == SCROLL_UP_KEY {
+				} else if key == KEY_SCROLL_UP {
 					hs.locationLatitudeStr = "+"
 				}
 
@@ -520,7 +552,7 @@ func (hs *Handset) StateMachine(key Key) string {
 
 		if !doNav(key, &hs.state) {
 
-			if key == LEFT_KEY && len(hs.locationLongitudeStr) > 0 {
+			if key == KEY_LEFT && len(hs.locationLongitudeStr) > 0 {
 				hs.locationLongitudeStr = hs.locationLongitudeStr[:len(hs.locationLongitudeStr)-1]
 
 			} else if len(hs.locationLongitudeStr) == 3 && keyIsDigit(key) {
@@ -528,9 +560,9 @@ func (hs *Handset) StateMachine(key Key) string {
 
 			} else if len(hs.locationLongitudeStr) == 0 {
 
-				if key == SCROLL_DN_KEY {
+				if key == KEY_SCROLL_DN {
 					hs.locationLongitudeStr = "-"
-				} else if key == SCROLL_UP_KEY {
+				} else if key == KEY_SCROLL_UP {
 					hs.locationLongitudeStr = "+"
 				}
 
@@ -542,7 +574,7 @@ func (hs *Handset) StateMachine(key Key) string {
 
 	case SET_ELEVATION:
 
-		if key == ENTER_KEY {
+		if key == KEY_ENTER {
 			elevation, _ := strconv.Atoi(hs.locationElevationStr)
 			hs.locationElevation = int16(elevation)
 			// DEVTODO - If we get to this point then we can turn we are considered to be setup
@@ -555,14 +587,14 @@ func (hs *Handset) StateMachine(key Key) string {
 
 		} else if !doNav(key, &hs.state) {
 
-			if key == LEFT_KEY && len(hs.locationElevationStr) > 0 {
+			if key == KEY_LEFT && len(hs.locationElevationStr) > 0 {
 				hs.locationElevationStr = hs.locationElevationStr[:len(hs.locationElevationStr)-1]
 
 			} else if len(hs.locationElevationStr) == 0 {
 
-				if key == SCROLL_DN_KEY {
+				if key == KEY_SCROLL_DN {
 					hs.locationElevationStr = "-"
-				} else if key == SCROLL_UP_KEY {
+				} else if key == KEY_SCROLL_UP {
 					hs.locationElevationStr = "+"
 				}
 
@@ -574,19 +606,19 @@ func (hs *Handset) StateMachine(key Key) string {
 
 	case UTILITY_MENU:
 
-		if key == ESC_KEY {
+		if key == KEY_ESC {
 			hs.state = FIRST
 		}
 
 	case OBJECTS_MENU:
 
-		if key == ESC_KEY {
+		if key == KEY_ESC {
 			hs.state = FIRST
 		}
 
 	case LAST:
 
-		if key == ESC_KEY {
+		if key == KEY_ESC {
 			hs.state = FIRST
 		}
 
@@ -610,6 +642,12 @@ func (hs *Handset) StateMachine(key Key) string {
 
 	case SHOW_VERSION:
 		hs.dspOut = "VERSION\n" + VERSION
+
+	case SET_RA_DIRECTION:
+		hs.dspOut = "RA Dir\n1 - North\n2 - South\n" + string(hs.Screen.Direction)
+
+	case SET_RA_TRACKING:
+		hs.dspOut = "RA Tracking\n1 - On\n2 - Off\n" + string(hs.Screen.Direction) // DEVTODO show enable/disable flag
 
 	case SET_DATE:
 		hs.dspOut = "Set Date\nYYYY-MM-DD\n-----------\n" + hs.currentDateStr
@@ -658,7 +696,7 @@ func (hs *Handset) RenderScreen() {
 
 	// Compute the status bar text
 	status[0] = 'S'
-	if hs.Screen.Direction {
+	if hs.Screen.Direction == driver.RA_DIR_NORTH {
 		status[0] = 'N'
 	}
 	statusText := fmt.Sprintf("%s\n-----------", status)
@@ -686,25 +724,25 @@ func (hs *Handset) RenderScreen() {
 // Util functions
 func keyIsDigit(key Key) bool {
 	switch key {
-	case ZERO_KEY:
+	case KEY_ZERO:
 		return true
-	case ONE_KEY:
+	case KEY_ONE:
 		return true
-	case TWO_KEY:
+	case KEY_TWO:
 		return true
-	case THREE_KEY:
+	case KEY_THREE:
 		return true
-	case FOUR_KEY:
+	case KEY_FOUR:
 		return true
-	case FIVE_KEY:
+	case KEY_FIVE:
 		return true
-	case SIX_KEY:
+	case KEY_SIX:
 		return true
-	case SEVEN_KEY:
+	case KEY_SEVEN:
 		return true
-	case EIGHT_KEY:
+	case KEY_EIGHT:
 		return true
-	case NINE_KEY:
+	case KEY_NINE:
 		return true
 	default:
 		return false
@@ -713,14 +751,14 @@ func keyIsDigit(key Key) bool {
 
 func doNav(key Key, state *State) bool {
 
-	if key == ESC_KEY {
+	if key == KEY_ESC {
 
 		if *state > FIRST {
 			*state--
 		}
 		return true
 
-	} else if key == ENTER_KEY {
+	} else if key == KEY_ENTER {
 
 		if *state < LAST {
 			*state++

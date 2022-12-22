@@ -22,7 +22,7 @@ import (
 	GP1 																																																				UART0 RX
 	GP2 																																											scrollDnKey
 	GP3 																																											zeroKey
-	GP4 																																											scrollUP_KEY
+	GP4 																																											scrollKEY_UP
 	GP5 																																											sevenKey
 	GP6 																																											eightKey
 	GP7 																																											nineKey
@@ -171,7 +171,7 @@ func main() {
 	eightKey := machine.GP6
 	nineKey := machine.GP7
 
-	scrollUP_KEY := machine.GP4
+	scrollKEY_UP := machine.GP4
 	scrollDnKey := machine.GP2
 
 	rightKey := machine.GP14
@@ -185,6 +185,7 @@ func main() {
 
 	handset, _ := hid.NewHandset(
 		&display,
+		&mb,
 		zeroKey,
 		oneKey,
 		twoKey,
@@ -195,7 +196,7 @@ func main() {
 		sevenKey,
 		eightKey,
 		nineKey,
-		scrollUP_KEY,
+		scrollKEY_UP,
 		scrollDnKey,
 		rightKey,
 		leftKey,

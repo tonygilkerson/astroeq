@@ -72,6 +72,7 @@ func main() {
 	mb.SetRADriverCh(raDriverCh)
 	//
 	// Start the subscription reader, it will read from the the UARTS
+	// and then dispatch message to the proper channels
 	//
 	go mb.SubscriptionReaderRoutine()
 
@@ -100,12 +101,10 @@ func main() {
 	var raPWM driver.PWM
 	raPWM = machine.PWM4
 
-	// DEVTODO - combine the two
-	raDirection := false
+	// Direction North or South
 	raDirectionPin := machine.GP8
 
-	// DEVTODO - combine the two
-	raEnableMotor := true
+	// Enable motor
 	raEnableMotorPin := machine.GP13
 
 	raStep := machine.GP9
@@ -121,14 +120,12 @@ func main() {
 	ra, _ := driver.NewRADriver(
 		raStep,
 		raPWM,
-		raDirection,
 		raDirectionPin,
 		raStepsPerRevolution,
 		raMaxHz,
 		raMicroStep1,
 		raMicroStep2,
 		raMaxMicroStepSetting,
-		raEnableMotor,
 		raEnableMotorPin,
 		raWormRatio,
 		raGearRatio,
@@ -214,7 +211,7 @@ func runLight() {
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	// blink run light for a bit seconds so I can tell it is starting
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 25; i++ {
 		led.High()
 		time.Sleep(time.Millisecond * 100)
 		led.Low()
@@ -244,10 +241,16 @@ func raDriverCtl(raMsg msg.RADriverMsg, ra *driver.RADriver) {
 	switch raMsg.Cmd {
 
 	case msg.RA_CMD_SET_DIR_NORTH:
-		ra.SetDirection(true)
+		ra.SetDirection(driver.RA_DIR_NORTH)
 
 	case msg.RA_CMD_SET_DIR_SOUTH:
-		ra.SetDirection(false)
+		ra.SetDirection(driver.RA_DIR_SOUTH)
+	
+	case msg.RA_CMD_TRACKING_ON:
+		ra.SetEnableMotor(true)
+	
+	case msg.RA_CMD_TRACKING_OFF:
+		ra.SetEnableMotor(false)
 	}
 }
 
@@ -257,8 +260,8 @@ func raBroadcastInfoRoutine(ra *driver.RADriver, mb *msg.MsgBroker) {
 		var raMsg msg.RADriverMsg
 		raMsg.Kind = msg.MSG_RADRIVER
 		raMsg.Cmd = msg.RA_CMD_INFO
-		raMsg.Position = ra.GetPosition()
 		raMsg.Direction = ra.GetDirection()
+		raMsg.Position = ra.GetPosition()
 
 		mb.PublishRADriver(raMsg)
 
