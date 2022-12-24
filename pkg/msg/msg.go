@@ -63,6 +63,8 @@ type HandsetMsg struct {
 //
 // ^RADriver|SetDirNorth~
 // ^RADriver|SetDirSouth~
+// ^RADriver|SetTrackingOn~
+// ^RADriver|SetTrackingOff~
 // ^RADriver|INFO|true|North|12345~
 type RADriverMsg struct {
 	Kind      MsgType
@@ -112,22 +114,22 @@ func NewBroker(
 
 ) (MsgBroker, error) {
 
-	return MsgBroker{
-		logLevel: MSG_INFO, // default
+	var mb MsgBroker
+	mb.logLevel = MSG_INFO // default
 
-		uartUp:      uartUp,
-		uartUpTxPin: uartUpTxPin,
-		uartUpRxPin: uartUpRxPin,
+	if uartUp != nil {
+		mb.uartUp = uartUp
+		mb.uartUpTxPin = uartUpTxPin
+		mb.uartUpRxPin = uartUpRxPin
+	}
 
-		uartDn:      uartDn,
-		uartDnTxPin: uartDnTxPin,
-		uartDnRxPin: uartDnRxPin,
+	if uartDn != nil {
+		mb.uartDn = uartDn
+		mb.uartDnTxPin = uartDnTxPin
+		mb.uartDnRxPin = uartDnRxPin
+	}
 
-		fooCh:      nil,
-		logCh:      nil,
-		handsetCh:  nil,
-		raDriverCh: nil,
-	}, nil
+	return mb, nil
 
 }
 
@@ -160,54 +162,117 @@ func (mb *MsgBroker) SetRADriverCh(ch chan RADriverMsg) {
 // Look for messages that look like this
 //
 //	^Log|Info|HID|A log message from the HID~
+// func (mb *MsgBroker) SubscriptionReaderRoutine() {
+
+// 	//
+// 	// Look for start of message loop
+// 	//
+// 	for {
+
+// 		// If no data wait and try again
+// 		if mb.uartUp.Buffered() == 0 {
+// 			time.Sleep(time.Millisecond * 100)
+// 			continue
+// 		}
+
+// 		data, _ := mb.uartUp.ReadByte()
+
+// 		// the "^" character is the start of a message
+// 		if data == 94 {
+// 			message := make([]byte, 0, 255) //capacity of 255
+
+// 			//
+// 			// Start loop read a message
+// 			//
+// 			for {
+
+// 				// If no data wait and try again
+// 				if mb.uartUp.Buffered() == 0 {
+// 					time.Sleep(time.Millisecond * 1)
+// 					continue
+// 				}
+
+// 				// the "~" character is the end of a message
+// 				data, _ := mb.uartUp.ReadByte()
+
+// 				if data == 126 {
+// 					break
+// 				} else {
+// 					message = append(message, data)
+// 				}
+
+// 			}
+
+// 			//
+// 			// At this point we have an entire message, so dispatch it!
+// 			//
+// 			msgParts := strings.Split(string(message[:]), "|")
+// 			mb.DispatchMsgToChannel(msgParts)
+
+// 		}
+// 	}
+// }
+
 func (mb *MsgBroker) SubscriptionReaderRoutine() {
 
-	//
-	// Look for start of message loop
-	//
 	for {
 
-		// If no data wait and try again
-		if mb.uartUp.Buffered() == 0 {
-			time.Sleep(time.Millisecond * 100)
-			continue
-		}
+		mb.uartReader(mb.uartUp, mb.uartDn)
+		time.Sleep(time.Millisecond * 100)
 
-		data, _ := mb.uartUp.ReadByte()
+		mb.uartReader(mb.uartDn, mb.uartUp)
+		time.Sleep(time.Millisecond * 100)
+	}
+}
 
-		// the "^" character is the start of a message
-		if data == 94 {
-			message := make([]byte, 0, 255) //capacity of 255
+func (mb *MsgBroker) uartReader(readFromUart UART, forwardToUart UART) {
 
-			//
-			// Start loop read a message
-			//
-			for {
+	// If no data, quit
+	if readFromUart == nil || readFromUart.Buffered() == 0 {
+		return
+	}
 
-				// If no data wait and try again
-				if mb.uartUp.Buffered() == 0 {
-					time.Sleep(time.Millisecond * 1)
-					continue
-				}
+	data, _ := readFromUart.ReadByte()
 
-				// the "~" character is the end of a message
-				data, _ := mb.uartUp.ReadByte()
+	// the "^" character is the start of a message
+	if data == 94 {
+		message := make([]byte, 0, 255) //capacity of 255
 
-				if data == 126 {
-					break
-				} else {
-					message = append(message, data)
-				}
+		//
+		// Start loop read a message
+		//
+		for {
 
+			// If no data wait and try again
+			if readFromUart.Buffered() == 0 {
+				time.Sleep(time.Millisecond * 10)
+				continue
 			}
 
-			//
-			// At this point we have an entire message, so dispatch it!
-			//
-			msgParts := strings.Split(string(message[:]), "|")
-			mb.DispatchMsgToChannel(msgParts)
+			// the "~" character is the end of a message
+			data, _ := readFromUart.ReadByte()
+
+			if data == 126 {
+				break
+			} else {
+				message = append(message, data)
+			}
 
 		}
+
+		//
+		// At this point we have an entire message, so dispatch it!
+		//
+		msgParts := strings.Split(string(message[:]), "|")
+
+		mb.DispatchMsgToChannel(msgParts)
+
+		// DEVTODO - get this working soon
+		// // Forward message for other potential consumers
+		// if forwardToUart != nil {
+		// 	forwardToUart.Write(message)
+		// }
+
 	}
 }
 
@@ -416,6 +481,8 @@ func unmarshallHandset(msgParts []string) *HandsetMsg {
 
 func unmarshallRADriver(msgParts []string) *RADriverMsg {
 
+	// DEVTODO - I need a way to make the compiler complain when this does not match the struct
+
 	raDriverMsg := new(RADriverMsg)
 
 	if len(msgParts) > 0 {
@@ -426,14 +493,19 @@ func unmarshallRADriver(msgParts []string) *RADriverMsg {
 	}
 
 	if len(msgParts) > 2 {
-		if RADriverCmd(msgParts[2]) == "North" {
+		if msgParts[2] == "true" {
+			raDriverMsg.Tracking = true
+		} else {
+			raDriverMsg.Tracking = false
+		}
+	}
+
+	if len(msgParts) > 3 {
+		if RADriverCmd(msgParts[3]) == "North" {
 			raDriverMsg.Direction = driver.RA_DIR_NORTH
 		} else {
 			raDriverMsg.Direction = driver.RA_DIR_SOUTH
 		}
-	}
-	if len(msgParts) > 3 {
-		raDriverMsg.Direction = driver.RaDirection(msgParts[3])
 	}
 
 	if len(msgParts) > 4 {

@@ -60,7 +60,7 @@ func main() {
 	// Broker
 	/////////////////////////////////////////////////////////////////////////////
 
-	fmt.Println("Create new broker")
+	fmt.Println("[main] Create new broker")
 
 	machine.UART0.Configure(machine.UARTConfig{
 		TX: machine.UART0_TX_PIN,
@@ -237,7 +237,7 @@ func runLight() {
 	led.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	// blink run light for a bit seconds so I can tell it is starting
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		led.High()
 		time.Sleep(time.Millisecond * 100)
 		led.Low()
@@ -279,7 +279,6 @@ func fooConsumerRoutine(ch chan msg.FooMsg, mb *msg.MsgBroker) {
 func raDriverConsumerRoutine(hs *hid.Handset, ch chan msg.RADriverMsg, mb *msg.MsgBroker) {
 
 	for raMsg := range ch {
-		fmt.Printf("[handset.raDriverConsumerRoutine] - Kind: [%s], Cmd: [%s]\n", raMsg.Kind, raMsg.Cmd)
 		fmt.Printf("[handset.raDriverConsumerRoutine] - msg: [%v]\n", raMsg)
 
 		// We are only interested in raDriver info messages

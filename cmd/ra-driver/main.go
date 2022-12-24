@@ -22,8 +22,11 @@ func main() {
 	// Broker
 	/////////////////////////////////////////////////////////////////////////////
 
-	fmt.Println("Create new broker")
+	fmt.Println("[main] Create new broker")
 
+	//
+	// UART0
+	//
 	machine.UART0.Configure(machine.UARTConfig{
 		TX: machine.UART0_TX_PIN,
 		RX: machine.UART0_RX_PIN,
@@ -33,13 +36,21 @@ func main() {
 	var uartUpTxPin machine.Pin
 	var uartUpRxPin machine.Pin
 
-	var uartDn msg.UART
-	var uartDnTxPin machine.Pin
-	var uartDnRxPin machine.Pin
-
 	uartUp = machine.UART0
 	uartUpTxPin = machine.UART0_TX_PIN
 	uartUpRxPin = machine.UART0_RX_PIN
+
+	//
+	// UART1
+	//
+	machine.UART1.Configure(machine.UARTConfig{
+		TX: machine.GP4,
+		RX: machine.GP5,
+	})
+
+	var uartDn msg.UART
+	var uartDnTxPin machine.Pin
+	var uartDnRxPin machine.Pin
 
 	uartDn = machine.UART1
 	uartDnTxPin = machine.GP4
@@ -176,12 +187,10 @@ func main() {
 		// 	break
 		// }
 
-		//Test to the UART
-		uartUp.Write([]byte("."))
 	}
 
 	fmt.Println("[main] Reset RA and track by min...")
-	ra.ZeroRA() // DEVTODO done not seem to work, make sure I am clearing the rotation count as well
+	ra.ZeroRA() // DEVTODO does not seem to work, make sure I am clearing the rotation count as well
 	time.Sleep(time.Millisecond * 5000)
 
 	//
@@ -230,7 +239,7 @@ func fooConsumerRoutine(ch chan msg.FooMsg, mb *msg.MsgBroker) {
 func raConsumerRoutine(ch chan msg.RADriverMsg, mb *msg.MsgBroker, ra *driver.RADriver) {
 
 	for raMsg := range ch {
-		fmt.Printf("[ra-driver.raDriverConsumer] - Kind: [%s], Cmd: [%s]\n", raMsg.Kind, raMsg.Cmd)
+		fmt.Printf("[ra-driver.raDriverConsumer] - raMsg: [%v]\n", raMsg)
 		raDriverCtl(raMsg, ra)
 	}
 

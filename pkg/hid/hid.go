@@ -694,12 +694,10 @@ func (hs *Handset) RenderScreen() {
 
 	status := [10]byte{' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '}
 
-
-
 	// Compute the status bar text
 	status[0] = '0'
 	if hs.Screen.Tracking {
-		status[1] = '1'
+		status[0] = '1'
 	}
 
 	status[1] = 'S'
@@ -711,10 +709,6 @@ func (hs *Handset) RenderScreen() {
 	hs.Screen.prevStatusBarText = hs.Screen.statusBarText
 	hs.Screen.statusBarText = statusText
 
-	
-	fmt.Printf("statusBarText\nprev-------------------\n%v\ncurrent-------------------\n%v\n", hs.Screen.prevStatusBarText, hs.Screen.statusBarText)
-	fmt.Printf("BodyText\nprev-------------------\n%v\ncurrent-------------------\n%v\n", hs.Screen.PrevBodyText, hs.Screen.BodyText)
-
 	// If no change then get out! Don't make the screen flicker
 	if hs.Screen.statusBarText == hs.Screen.prevStatusBarText && hs.Screen.BodyText == hs.Screen.PrevBodyText {
 		return
@@ -722,7 +716,7 @@ func (hs *Handset) RenderScreen() {
 
 	// DEVTODO - try to do better than clearing the screen each time
 	hs.Screen.displayDevice.FillScreen(color.RGBA{0, 0, 0, 0})
-	
+
 	// Status Bar
 	tinyfont.WriteLine(
 		hs.Screen.displayDevice,
@@ -739,8 +733,7 @@ func (hs *Handset) RenderScreen() {
 		hs.Screen.BodyText,
 		hs.Screen.fontColor)
 
-		
-		hs.Screen.PrevBodyText = hs.Screen.BodyText
+	hs.Screen.PrevBodyText = hs.Screen.BodyText
 }
 
 // Util functions
