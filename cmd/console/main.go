@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"machine"
+
 	"time"
 
 	"image/color"
@@ -14,10 +15,38 @@ import (
 	"github.com/tonygilkerson/astroeq/pkg/msg"
 )
 
+type DisplayFilter struct {
+	Filter string // Foo | Handset | RADriver
+	Key0 machine.Pin
+	Key1 machine.Pin
+	Key2 machine.Pin
+	Key3 machine.Pin
+}
 func main() {
 
 	// run light
 	runLight()
+
+	//
+	// Configure the filter
+	//
+	var df DisplayFilter
+	df.Key0 = machine.GP15
+	df.Key1 = machine.GP17
+	df.Key2 = machine.GP2
+	df.Key3 = machine.GP3
+
+	df.Key0.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
+	df.Key1.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
+	df.Key2.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
+	df.Key3.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
+	
+
+	df.Key0.SetInterrupt(machine.PinFalling, func(p machine.Pin) { fmt.Println("key0"); df.Filter = "Handset";  })
+	df.Key1.SetInterrupt(machine.PinFalling, func(p machine.Pin) { fmt.Println("key1"); df.Filter = "RADriver";  })
+	df.Key2.SetInterrupt(machine.PinFalling, func(p machine.Pin) { fmt.Println("key2"); df.Filter = "XXXXX";  })
+	df.Key3.SetInterrupt(machine.PinFalling, func(p machine.Pin) { fmt.Println("key3"); df.Filter = "XXXXX";   })
+	
 
 	/////////////////////////////////////////////////////////////////////////////
 	// Console Display
@@ -72,18 +101,24 @@ func main() {
 	//
 	fooCh := make(chan msg.FooMsg)
 	logCh := make(chan msg.LogMsg)
+	handsetCh := make(chan msg.HandsetMsg)
+	raDriverCh := make(chan msg.RADriverMsg)
 
 	//
 	// Register the channels with the broker
 	//
 	mb.SetFooCh(fooCh)
 	mb.SetLogCh(logCh)
+	mb.SetHandsetCh(handsetCh)
+	mb.SetRADriverCh(raDriverCh)
 
 	//
 	// Start the message consumers
 	//
 	go fooConsumerRoutine(fooCh, mb, consoleCh)
 	go logConsumerRoutine(logCh, mb, consoleCh)
+	go handsetConsumerRoutine(handsetCh, mb, consoleCh)
+	go raDriverConsumerRoutine(raDriverCh, mb, consoleCh)
 
 	//
 	// Start the subscription reader, it will read from the the UARTS
@@ -94,7 +129,7 @@ func main() {
 	// writeConsole
 	/////////////////////////////////////////////////////////////////////////////
 
-	go consoleRoutine(display, consoleCh)
+	go consoleRoutine(display, consoleCh, &df)
 
 	//
 	// Keep main live
@@ -144,6 +179,32 @@ func fooConsumerRoutine(fooCh chan msg.FooMsg, mb msg.MsgBroker, consoleCh chan 
 		consoleCh <- s
 	}
 }
+// Read from handsetCh and write to consoleCh
+func handsetConsumerRoutine(handsetCh chan msg.HandsetMsg, mb msg.MsgBroker, consoleCh chan string) {
+
+	for msg := range handsetCh {
+		s := fmt.Sprintf("%v\n", msg)
+		consoleCh <- s
+	}
+}
+// Read from raDriverCh and write to consoleCh
+func raDriverConsumerRoutine(raDriverCh chan msg.RADriverMsg, mb msg.MsgBroker, consoleCh chan string) {
+	
+	for msg := range raDriverCh {
+		var s string = string(msg.Kind) + "\n"
+		s += string(msg.Cmd) + "\n"
+		s += string(msg.Direction) + "\n"
+		s += string(msg.Position) + "\n"
+		if msg.Tracking {
+			s += "Tracking On"
+		} else {
+			s += "Tracking Off"
+		}	 
+		
+		consoleCh <- s
+	}
+}
+
 
 // Read from logCh and write to consoleCh
 func logConsumerRoutine(logCh chan msg.LogMsg, mb msg.MsgBroker, consoleCh chan string) {
@@ -155,7 +216,7 @@ func logConsumerRoutine(logCh chan msg.LogMsg, mb msg.MsgBroker, consoleCh chan 
 	}
 }
 
-func consoleRoutine(display st7789.Device, ch chan string) {
+func consoleRoutine(display st7789.Device, ch chan string, df *DisplayFilter) {
 
 	width, height := display.Size()
 	fmt.Printf("width: %v, height: %v\n", width, height)
@@ -181,6 +242,8 @@ func consoleRoutine(display st7789.Device, ch chan string) {
 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 200, "Ready...10", red)
 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 220, "Ready...11", red)
 
+	time.Sleep(time.Millisecond * 3000)
+	fmt.Printf("[consoleRoutine] - startup...\n")
 	// var l int16 = 1
 	// var first bool = true
 	// var toggle bool = true
@@ -213,9 +276,22 @@ func consoleRoutine(display st7789.Device, ch chan string) {
 	// 	l++
 	// }
 
+	var lastMsg string = ""
+
 	for msg := range ch {
-		cls(&display)
-		tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 20, msg, green)
+		// if strings.Contains(msg,df.Filter) {
+		// 	cls(&display)
+		// 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 20, msg, green)
+		// 	fmt.Printf("[consoleRoutine] - msg:\n%v\n", msg)
+		// } else {
+		// 	fmt.Printf("[consoleRoutine] - does not match filter:\n%v\n", df.Filter)
+		// }
+			
+			if msg != lastMsg {
+				cls(&display)
+				tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 20, msg, green)		
+			}
+			lastMsg =  msg
 	}
 
 }
