@@ -15,18 +15,20 @@ type MicroStep uint16
 
 // Microstep settings
 const (
-	MS_FULL      MicroStep = 1
+	// MS_FULL      MicroStep = 1     // This seems weird but the TMC2208 does not support a full step
 	MS_HALF      MicroStep = 2
 	MS_QUARTER   MicroStep = 4
 	MS_EIGHTH    MicroStep = 8
 	MS_SIXTEENTH MicroStep = 16
 )
 
-type RaDirection string
+type RaValue string
 
 const (
-	RA_DIR_NORTH RaDirection = "North"
-	RA_DIR_SOUTH RaDirection = "South"
+	RA_DIRECTION_NORTH RaValue = "North"
+	RA_DIRECTION_SOUTH         = "South"
+	RA_TRACKING_ON             = "On"
+	RA_TRACKING_OFF            = "Off"
 )
 
 const SIDEREAL_DAY_IN_SECONDS = 86_164.1
@@ -120,8 +122,10 @@ func NewRADriver(
 
 ) (RADriver, error) {
 
-	// DEVTODO use constants
-	if maxMicroStepSetting != 2 && maxMicroStepSetting != 4 && maxMicroStepSetting != 8 && maxMicroStepSetting != 16 {
+	if maxMicroStepSetting != MS_HALF &&
+		maxMicroStepSetting != MS_QUARTER &&
+		maxMicroStepSetting != MS_EIGHTH &&
+		maxMicroStepSetting != MS_SIXTEENTH {
 		return RADriver{}, errors.New("maxMicroStepSetting must be 2, 4, 8 or 16")
 	}
 
@@ -181,11 +185,11 @@ func (ra *RADriver) Configure() {
 
 	// Direction
 	ra.directionPin.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	ra.SetDirection(RA_DIR_NORTH)
+	ra.SetDirection(RA_DIRECTION_NORTH)
 
 	// Enable Motor
 	ra.enableMotorPin.Configure(machine.PinConfig{Mode: machine.PinOutput})
-	ra.SetTracking(false)
+	ra.SetTracking(RA_TRACKING_OFF)
 
 	// RA Encoder
 	ra.encoder.Configure()
@@ -279,43 +283,49 @@ func (ra *RADriver) monitorPositionRoutine() {
 		} else {
 			println("[monitorPositionRoutine] Error getting position")
 		}
-		time.Sleep(time.Millisecond * 450) //DEVTODO - not sure if this is too short or too long?
+		time.Sleep(time.Millisecond * 700) //DEVTODO - not sure if this is too short or too long?
 	}
 }
 
-func (ra *RADriver) SetTracking(enable bool) {
+func (ra *RADriver) GetTracking() RaValue {
 
-	if enable {
-		ra.enableMotorPin.Low() // Enabled if pin is low
+	// Enabled if pin is low, so if true return off
+	if ra.enableMotorPin.Get() {
+		return RA_TRACKING_OFF
 	} else {
-		ra.enableMotorPin.High()
+		return RA_TRACKING_ON
 	}
 
-}
-
-func (ra *RADriver) GetTracking() bool {
-	// Enabled if pin is low, so if low return true
-	return !ra.enableMotorPin.Get()
 }
 
 func (ra *RADriver) GetPosition() uint32 {
 	return ra.position
 }
 
-func (ra *RADriver) GetDirection() RaDirection {
+func (ra *RADriver) GetDirection() RaValue {
 	if ra.directionPin.Get() {
-		return RA_DIR_NORTH
+		return RA_DIRECTION_NORTH
 	} else {
-		return RA_DIR_SOUTH
+		return RA_DIRECTION_SOUTH
 	}
 }
 
-func (ra *RADriver) SetDirection(direction RaDirection) {
+func (ra *RADriver) SetDirection(direction RaValue) {
 
-	if direction == RA_DIR_NORTH {
+	if direction == RA_DIRECTION_NORTH {
 		ra.directionPin.High()
 	} else {
 		ra.directionPin.Low()
+	}
+
+}
+
+func (ra *RADriver) SetTracking(tracking RaValue) {
+
+	if tracking == RA_TRACKING_ON {
+		ra.enableMotorPin.Low() // Enabled if pin is low
+	} else {
+		ra.enableMotorPin.High()
 	}
 
 }

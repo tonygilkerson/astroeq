@@ -10,31 +10,25 @@ import (
 	"github.com/tonygilkerson/astroeq/pkg/driver"
 )
 
+const (
+	TOKEN_HAT   byte = 94  // ^
+	TOKEN_ABOUT byte = 126 // ~
+)
+
 // Define message types
 type MsgType string
-type LogLevel string
 type RADriverCmd string
 
 const (
-	MSG_FOO      MsgType = "Foo"
-	MSG_LOG      MsgType = "Log"
-	MSG_HANDSET  MsgType = "Handset"
-	MSG_RADRIVER MsgType = "RADriver"
+	MSG_FOO          MsgType = "Foo"
+	MSG_HANDSET      MsgType = "Handset"
+	MSG_RADRIVER     MsgType = "RADriver"
+	MSG_RADRIVER_CMD MsgType = "RADriverCmd"
 )
 
 const (
-	MSG_DEBUG LogLevel = "Debug"
-	MSG_INFO  LogLevel = "Info"
-	MSG_WARN  LogLevel = "Warn"
-	MSG_ERROR LogLevel = "Error"
-)
-
-const (
-	RA_CMD_INFO          RADriverCmd = "INFO"
-	RA_CMD_SET_DIR_NORTH RADriverCmd = "SetDirNorth"
-	RA_CMD_SET_DIR_SOUTH RADriverCmd = "SetDirSouth"
-	RA_CMD_TRACKING_ON   RADriverCmd = "SetTrackingOn"
-	RA_CMD_TRACKING_OFF  RADriverCmd = "SetTrackingOff"
+	RA_CMD_SET_TRACKING  RADriverCmd = "SetTracking"
+	RA_CMD_SET_DIRECTION RADriverCmd = "SetDirection"
 )
 
 // Foo message use for testing I will delete it eventually
@@ -45,37 +39,36 @@ type FooMsg struct {
 	Kind MsgType
 	Name string
 }
-type LogMsg struct {
-	Kind   MsgType
-	Level  LogLevel
-	Source string
-	Body   string
-}
+
+// ^Handset|somekey~
 type HandsetMsg struct {
 	Kind MsgType
 	Keys []string
 }
 
-// DEVTODO - Creat RADriverMsg and RADriverCmd
-// DEVTODO - combine SetDirNorth and SetDirSouth into SetDirection and have it take as a parm driver.RA_DIR_NORTH
 // RA Driver message used for sending commands to the RA Driver and for publishing it current status
 // The following are sample messages
 //
-// ^RADriver|SetDirNorth~
-// ^RADriver|SetDirSouth~
-// ^RADriver|SetTrackingOn~
-// ^RADriver|SetTrackingOff~
-// ^RADriver|INFO|true|North|12345~
+// ^RADriver|On|North|12345~
 type RADriverMsg struct {
 	Kind      MsgType
-	Cmd       RADriverCmd
-	Tracking  bool
-	Direction driver.RaDirection
+	Tracking  driver.RaValue
+	Direction driver.RaValue
 	Position  uint32
 }
 
+// ^RADriverCmd|SetTracking|On~
+// ^RADriverCmd|SetTracking|Off~
+// ^RADriverCmd|SetDirection|North~
+// ^RADriverCmd|SetDirection|South~
+type RADriverCmdMsg struct {
+	Kind MsgType
+	Cmd  RADriverCmd
+	Args []string
+}
+
 type MsgInterface interface {
-	FooMsg | LogMsg | HandsetMsg | RADriverMsg
+	FooMsg | HandsetMsg | RADriverMsg | RADriverCmdMsg
 }
 
 type UART interface {
@@ -87,8 +80,6 @@ type UART interface {
 
 // Message Broker
 type MsgBroker struct {
-	logLevel LogLevel
-
 	uartUp      UART
 	uartUpTxPin machine.Pin
 	uartUpRxPin machine.Pin
@@ -97,10 +88,10 @@ type MsgBroker struct {
 	uartDnTxPin machine.Pin
 	uartDnRxPin machine.Pin
 
-	fooCh      chan FooMsg
-	logCh      chan LogMsg
-	handsetCh  chan HandsetMsg
-	raDriverCh chan RADriverMsg
+	fooCh         chan FooMsg
+	handsetCh     chan HandsetMsg
+	raDriverCh    chan RADriverMsg
+	raDriverCmdCh chan RADriverCmdMsg
 }
 
 func NewBroker(
@@ -115,7 +106,6 @@ func NewBroker(
 ) (MsgBroker, error) {
 
 	var mb MsgBroker
-	mb.logLevel = MSG_INFO // default
 
 	if uartUp != nil {
 		mb.uartUp = uartUp
@@ -152,66 +142,12 @@ func (mb *MsgBroker) SetFooCh(ch chan FooMsg) {
 func (mb *MsgBroker) SetHandsetCh(ch chan HandsetMsg) {
 	mb.handsetCh = ch
 }
-func (mb *MsgBroker) SetLogCh(ch chan LogMsg) {
-	mb.logCh = ch
-}
 func (mb *MsgBroker) SetRADriverCh(ch chan RADriverMsg) {
 	mb.raDriverCh = ch
 }
-
-// Look for messages that look like this
-//
-//	^Log|Info|HID|A log message from the HID~
-// func (mb *MsgBroker) SubscriptionReaderRoutine() {
-
-// 	//
-// 	// Look for start of message loop
-// 	//
-// 	for {
-
-// 		// If no data wait and try again
-// 		if mb.uartUp.Buffered() == 0 {
-// 			time.Sleep(time.Millisecond * 100)
-// 			continue
-// 		}
-
-// 		data, _ := mb.uartUp.ReadByte()
-
-// 		// the "^" character is the start of a message
-// 		if data == 94 {
-// 			message := make([]byte, 0, 255) //capacity of 255
-
-// 			//
-// 			// Start loop read a message
-// 			//
-// 			for {
-
-// 				// If no data wait and try again
-// 				if mb.uartUp.Buffered() == 0 {
-// 					time.Sleep(time.Millisecond * 1)
-// 					continue
-// 				}
-
-// 				// the "~" character is the end of a message
-// 				data, _ := mb.uartUp.ReadByte()
-
-// 				if data == 126 {
-// 					break
-// 				} else {
-// 					message = append(message, data)
-// 				}
-
-// 			}
-
-// 			//
-// 			// At this point we have an entire message, so dispatch it!
-// 			//
-// 			msgParts := strings.Split(string(message[:]), "|")
-// 			mb.DispatchMsgToChannel(msgParts)
-
-// 		}
-// 	}
-// }
+func (mb *MsgBroker) SetRADriverCmdCh(ch chan RADriverCmdMsg) {
+	mb.raDriverCmdCh = ch
+}
 
 func (mb *MsgBroker) SubscriptionReaderRoutine() {
 
@@ -235,16 +171,24 @@ func (mb *MsgBroker) uartReader(readFromUart UART, forwardToUart UART) {
 	data, _ := readFromUart.ReadByte()
 
 	// the "^" character is the start of a message
-	if data == 94 {
+	if data == TOKEN_HAT {
 		message := make([]byte, 0, 255) //capacity of 255
 
 		//
 		// Start loop read a message
 		//
+		var abortCount int
+
 		for {
+
+			// If we see the start of a message but don't get the end in less than a second then abort
+			if abortCount > 100 {
+				return
+			}
 
 			// If no data wait and try again
 			if readFromUart.Buffered() == 0 {
+				abortCount++
 				time.Sleep(time.Millisecond * 10)
 				continue
 			}
@@ -252,7 +196,7 @@ func (mb *MsgBroker) uartReader(readFromUart UART, forwardToUart UART) {
 			// the "~" character is the end of a message
 			data, _ := readFromUart.ReadByte()
 
-			if data == 126 {
+			if data == TOKEN_ABOUT {
 				break
 			} else {
 				message = append(message, data)
@@ -263,15 +207,20 @@ func (mb *MsgBroker) uartReader(readFromUart UART, forwardToUart UART) {
 		//
 		// At this point we have an entire message, so dispatch it!
 		//
-		msgParts := strings.Split(string(message[:]), "|")
+		msgParts := strings.Split(string(message), "|")
 
 		mb.DispatchMsgToChannel(msgParts)
 
-		// DEVTODO - get this working soon
-		// // Forward message for other potential consumers
-		// if forwardToUart != nil {
-		// 	forwardToUart.Write(message)
-		// }
+		// Forward message for other potential consumers
+		if forwardToUart != nil {
+
+			// rewrap the message to start with ^ and end with ~
+			message = append([]byte{TOKEN_HAT}, message...)
+			message = append(message, TOKEN_ABOUT)
+
+			forwardToUart.Write(message)
+
+		}
 
 	}
 }
@@ -282,60 +231,31 @@ func (mb *MsgBroker) DispatchMsgToChannel(msgParts []string) {
 
 	case string(MSG_FOO):
 		fmt.Printf("[DispatchMsgToChannel] - %v\n", MSG_FOO)
-		msg := unmarshallFoo(msgParts)
+		msg := makeFoo(msgParts)
 		if mb.fooCh != nil {
 			mb.fooCh <- *msg
 		}
-	case string(MSG_LOG):
-		fmt.Printf("[DispatchMsgToChannel] - %v\n", MSG_LOG)
-		msg := unmarshallLog(msgParts)
-		if mb.logCh != nil {
-			mb.logCh <- *msg
-		}
 	case string(MSG_HANDSET):
 		fmt.Printf("[DispatchMsgToChannel] - %v\n", MSG_HANDSET)
-		msg := unmarshallHandset(msgParts)
+		msg := makeHandset(msgParts)
 		if mb.handsetCh != nil {
 			mb.handsetCh <- *msg
 		}
 	case string(MSG_RADRIVER):
 		fmt.Printf("[DispatchMsgToChannel] - %v\n", MSG_RADRIVER)
-		msg := unmarshallRADriver(msgParts)
+		msg := makeRADriver(msgParts)
 		if mb.raDriverCh != nil {
 			mb.raDriverCh <- *msg
+		}
+	case string(MSG_RADRIVER_CMD):
+		fmt.Printf("[DispatchMsgToChannel] - %v\n", MSG_RADRIVER_CMD)
+		msg := makeRADriverCmd(msgParts)
+		if mb.raDriverCmdCh != nil {
+			mb.raDriverCmdCh <- *msg
 		}
 	default:
 		fmt.Println("[DispatchMsgToChannel] - no match found")
 	}
-
-}
-
-func (mb *MsgBroker) SetLogLevel(level LogLevel) {
-	mb.logLevel = level
-}
-
-func (mb *MsgBroker) isLoggable(level LogLevel) bool {
-
-	switch level {
-	case MSG_DEBUG:
-		return true
-
-	case MSG_INFO:
-		if mb.logLevel == MSG_ERROR || mb.logLevel == MSG_WARN || mb.logLevel == MSG_INFO {
-			return true
-		}
-	case MSG_WARN:
-		if mb.logLevel == MSG_ERROR || mb.logLevel == MSG_WARN {
-			return true
-		}
-	case MSG_ERROR:
-		if mb.logLevel == MSG_ERROR {
-			return true
-		}
-
-	}
-
-	return false
 
 }
 
@@ -348,39 +268,9 @@ func (mb *MsgBroker) PublishFoo(foo FooMsg) {
 
 }
 
-func (mb *MsgBroker) PublishLog(log LogMsg) {
-
-	// If not loggable do nothing
-	if !mb.isLoggable(log.Level) {
-		return
-	}
-
-	msgStr := "^" + string(log.Kind)
-	msgStr = msgStr + "|" + string(log.Level)
-	msgStr = msgStr + "|" + string(log.Source)
-	msgStr = msgStr + "|" + string(log.Body) + "~"
-
-	mb.PublishMsg(msgStr)
-
-}
-
-// DEVTODO - I delete PublishHandset soon
-// func (mb *MsgBroker) PublishHandset(handsetMsg HandsetMsg) {
-
-// 	msgStr := "^" + string(handsetMsg.Kind)
-
-// 	for _, key := range handsetMsg.Keys {
-// 		msgStr = msgStr + "|" + key
-// 	}
-// 	msgStr = msgStr + "~"
-
-// 	mb.PublishMsg(msgStr)
-
-// }
 func (mb *MsgBroker) PublishRADriver(raDriverMsg RADriverMsg) {
 
 	msgStr := "^" + string(raDriverMsg.Kind)
-	msgStr = msgStr + "|" + fmt.Sprintf("%v", raDriverMsg.Cmd)
 	msgStr = msgStr + "|" + fmt.Sprintf("%v", raDriverMsg.Tracking)
 	msgStr = msgStr + "|" + fmt.Sprintf("%v", raDriverMsg.Direction)
 	msgStr = msgStr + "|" + fmt.Sprintf("%v", raDriverMsg.Position) + "~"
@@ -389,30 +279,40 @@ func (mb *MsgBroker) PublishRADriver(raDriverMsg RADriverMsg) {
 
 }
 
-func (mb *MsgBroker) PublishRACmdSetDir(direction driver.RaDirection) {
+func (mb *MsgBroker) PublishRADriverCmd(raDriverCmdMsg RADriverCmdMsg) {
 
-	msgStr := "^" + string(MSG_RADRIVER)
-	if direction == driver.RA_DIR_NORTH {
-		msgStr = msgStr + "|" + string(RA_CMD_SET_DIR_NORTH)
-		msgStr = msgStr + "|" + string(driver.RA_DIR_NORTH) + "~"
-	} else {
-		msgStr = msgStr + "|" + string(RA_CMD_SET_DIR_SOUTH)
-		msgStr = msgStr + "|" + string(driver.RA_DIR_SOUTH) + "~"
-	}
+	msgStr := "^" + string(raDriverCmdMsg.Kind)
+	msgStr = msgStr + "|" + fmt.Sprintf("%v", raDriverCmdMsg.Cmd)
+	msgStr = msgStr + "|" + strings.Join(raDriverCmdMsg.Args, ",") + "~"
 
 	mb.PublishMsg(msgStr)
 
 }
-func (mb *MsgBroker) PublishRACmdSetTracking(tracking bool) {
 
-	msgStr := "^" + string(MSG_RADRIVER)
-	if tracking {
-		msgStr = msgStr + "|" + string(RA_CMD_TRACKING_ON) + "~"
+func (mb *MsgBroker) PublishRACmdSetDirection(direction driver.RaValue) {
+	var raCmdMsg RADriverCmdMsg
+
+	raCmdMsg.Kind = MSG_RADRIVER_CMD
+	raCmdMsg.Cmd = RA_CMD_SET_DIRECTION
+
+	if direction == driver.RA_DIRECTION_NORTH {
+		raCmdMsg.Args = append(raCmdMsg.Args, string(driver.RA_DIRECTION_NORTH))
 	} else {
-		msgStr = msgStr + "|" + string(RA_CMD_TRACKING_OFF) + "~"
+		raCmdMsg.Args = append(raCmdMsg.Args, string(driver.RA_DIRECTION_SOUTH))
 	}
 
-	mb.PublishMsg(msgStr)
+	mb.PublishRADriverCmd(raCmdMsg)
+
+}
+
+func (mb *MsgBroker) PublishRACmdSetTracking(tracking driver.RaValue) {
+	var raCmdMsg RADriverCmdMsg
+
+	raCmdMsg.Kind = MSG_RADRIVER_CMD
+	raCmdMsg.Cmd = RA_CMD_SET_TRACKING
+	raCmdMsg.Args = append(raCmdMsg.Args, string(tracking))
+
+	mb.PublishRADriverCmd(raCmdMsg)
 
 }
 
@@ -431,7 +331,7 @@ func (mb *MsgBroker) PublishMsg(msg string) {
 	}
 }
 
-func unmarshallFoo(msgParts []string) *FooMsg {
+func makeFoo(msgParts []string) *FooMsg {
 
 	fooMsg := new(FooMsg)
 
@@ -445,27 +345,7 @@ func unmarshallFoo(msgParts []string) *FooMsg {
 	return fooMsg
 }
 
-func unmarshallLog(msgParts []string) *LogMsg {
-
-	logMsg := new(LogMsg)
-
-	if len(msgParts) > 0 {
-		logMsg.Kind = MSG_LOG
-	}
-	if len(msgParts) > 1 {
-		logMsg.Level = LogLevel(msgParts[1])
-	}
-	if len(msgParts) > 2 {
-		logMsg.Source = msgParts[2]
-	}
-	if len(msgParts) > 3 {
-		logMsg.Body = msgParts[3]
-	}
-
-	return logMsg
-}
-
-func unmarshallHandset(msgParts []string) *HandsetMsg {
+func makeHandset(msgParts []string) *HandsetMsg {
 
 	handsetMsg := new(HandsetMsg)
 
@@ -479,7 +359,7 @@ func unmarshallHandset(msgParts []string) *HandsetMsg {
 	return handsetMsg
 }
 
-func unmarshallRADriver(msgParts []string) *RADriverMsg {
+func makeRADriver(msgParts []string) *RADriverMsg {
 
 	// DEVTODO - I need a way to make the compiler complain when this does not match the struct
 
@@ -488,44 +368,42 @@ func unmarshallRADriver(msgParts []string) *RADriverMsg {
 	if len(msgParts) > 0 {
 		raDriverMsg.Kind = MSG_RADRIVER
 	}
+
 	if len(msgParts) > 1 {
-		raDriverMsg.Cmd = RADriverCmd(msgParts[1])
+		// index 1 is "On" of "Off"
+		tracking := driver.RaValue(msgParts[1])
+		raDriverMsg.Tracking = tracking
 	}
 
 	if len(msgParts) > 2 {
-		if msgParts[2] == "true" {
-			raDriverMsg.Tracking = true
+		if RADriverCmd(msgParts[2]) == "North" {
+			raDriverMsg.Direction = driver.RA_DIRECTION_NORTH
 		} else {
-			raDriverMsg.Tracking = false
+			raDriverMsg.Direction = driver.RA_DIRECTION_SOUTH
 		}
 	}
 
 	if len(msgParts) > 3 {
-		if RADriverCmd(msgParts[3]) == "North" {
-			raDriverMsg.Direction = driver.RA_DIR_NORTH
-		} else {
-			raDriverMsg.Direction = driver.RA_DIR_SOUTH
-		}
-	}
-
-	if len(msgParts) > 4 {
-		p, _ := strconv.Atoi(msgParts[4])
+		p, _ := strconv.Atoi(msgParts[3])
 		raDriverMsg.Position = uint32(p)
 	}
 
 	return raDriverMsg
 }
+func makeRADriverCmd(msgParts []string) *RADriverCmdMsg {
 
-func (mb *MsgBroker) InfoLog(src string, body string) {
-	mb.PublishLog(makeLogMsg(MSG_INFO, src, body))
-}
-func makeLogMsg(level LogLevel, src string, body string) LogMsg {
+	raDriverCmdMsg := new(RADriverCmdMsg)
 
-	var logMsg LogMsg
-	logMsg.Kind = MSG_LOG
-	logMsg.Level = level
-	logMsg.Source = src
-	logMsg.Body = body
+	if len(msgParts) > 0 {
+		raDriverCmdMsg.Kind = MSG_RADRIVER_CMD
+	}
+	if len(msgParts) > 1 {
+		raDriverCmdMsg.Cmd = RADriverCmd(msgParts[1])
+	}
 
-	return logMsg
+	if len(msgParts) > 2 {
+		raDriverCmdMsg.Args = strings.Split(msgParts[2], ",")
+	}
+
+	return raDriverCmdMsg
 }

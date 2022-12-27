@@ -150,9 +150,9 @@ type Screen struct {
 	statusBarText     string
 	BodyText          string
 	prevStatusBarText string
-	PrevBodyText      string
-	Tracking          bool
-	Direction         driver.RaDirection
+	prevBodyText      string
+	Tracking          driver.RaValue
+	Direction         driver.RaValue
 	Position          uint32
 }
 
@@ -429,10 +429,10 @@ func (hs *Handset) StateMachine(key Key) string {
 
 		if !doNav(key, &hs.state) {
 			if key == KEY_ONE {
-				hs.msgBroker.PublishRACmdSetTracking(true)
+				hs.msgBroker.PublishRACmdSetTracking(driver.RA_TRACKING_ON)
 				hs.state++
 			} else if key == KEY_TWO {
-				hs.msgBroker.PublishRACmdSetTracking(false)
+				hs.msgBroker.PublishRACmdSetTracking(driver.RA_TRACKING_OFF)
 				hs.state++
 			}
 		}
@@ -441,10 +441,10 @@ func (hs *Handset) StateMachine(key Key) string {
 
 		if !doNav(key, &hs.state) {
 			if key == KEY_ONE {
-				hs.msgBroker.PublishRACmdSetDir(driver.RA_DIR_NORTH)
+				hs.msgBroker.PublishRACmdSetDirection(driver.RA_DIRECTION_NORTH)
 				hs.state++
 			} else if key == KEY_TWO {
-				hs.msgBroker.PublishRACmdSetDir(driver.RA_DIR_SOUTH)
+				hs.msgBroker.PublishRACmdSetDirection(driver.RA_DIRECTION_SOUTH)
 				hs.state++
 			}
 		}
@@ -647,7 +647,7 @@ func (hs *Handset) StateMachine(key Key) string {
 		hs.dspOut = "VERSION\n" + VERSION
 
 	case SET_RA_TRACKING:
-		hs.dspOut = "RA Tracking\n1 - On\n2 - Off\n" + string(hs.Screen.Direction) // DEVTODO show enable/disable flag
+		hs.dspOut = "RA Tracking\n1 - On\n2 - Off\n" + string(hs.Screen.Direction)
 
 	case SET_RA_DIRECTION:
 		hs.dspOut = "RA Dir\n1 - North\n2 - South\n" + string(hs.Screen.Direction)
@@ -692,17 +692,26 @@ func (hs *Handset) StateMachine(key Key) string {
 
 func (hs *Handset) RenderScreen() {
 
-	status := [10]byte{' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '}
+	status := []byte{' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '}
 
+	//
 	// Compute the status bar text
-	status[0] = '0'
-	if hs.Screen.Tracking {
-		status[0] = '1'
+	//
+
+	if hs.Screen.Tracking == driver.RA_TRACKING_ON {
+		// On - tracking
+		status[0] = 'T'
+	} else {
+		// Off - not tracking
+		status[0] = 'X'
 	}
 
-	status[1] = 'S'
-	if hs.Screen.Direction == driver.RA_DIR_NORTH {
+	if hs.Screen.Direction == driver.RA_DIRECTION_NORTH {
+		// Direction = North
 		status[1] = 'N'
+	} else {
+		// Direction = South
+		status[1] = 'S'
 	}
 
 	statusText := fmt.Sprintf("%s\n-----------", status)
@@ -710,7 +719,7 @@ func (hs *Handset) RenderScreen() {
 	hs.Screen.statusBarText = statusText
 
 	// If no change then get out! Don't make the screen flicker
-	if hs.Screen.statusBarText == hs.Screen.prevStatusBarText && hs.Screen.BodyText == hs.Screen.PrevBodyText {
+	if hs.Screen.statusBarText == hs.Screen.prevStatusBarText && hs.Screen.BodyText == hs.Screen.prevBodyText {
 		return
 	}
 
@@ -733,7 +742,7 @@ func (hs *Handset) RenderScreen() {
 		hs.Screen.BodyText,
 		hs.Screen.fontColor)
 
-	hs.Screen.PrevBodyText = hs.Screen.BodyText
+	hs.Screen.prevBodyText = hs.Screen.BodyText
 }
 
 // Util functions

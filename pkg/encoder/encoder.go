@@ -87,8 +87,6 @@ func (raEncoder *RAEncoder) GetPositionRA() (position uint32, err error) {
 		// Use the lower 14 bits for the encoderPosition
 		encoderReading = response & 0x3FFF
 
-		// DEVTODO - need to add a direction button so I can test going back and forth beyond the max position
-
 		// Check if the difference between current and previous position is large
 		// If so then we must have made a full rotation
 		if math.Abs(float64(raEncoder.previousEncoderReading)-float64(encoderReading)) > float64(MAX_ENCODER_READING/2) {
