@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"machine"
+	"strings"
 
 	"time"
 
@@ -17,15 +18,34 @@ import (
 
 type DisplayFilter struct {
 	Filter string // Foo | Handset | RADriver
-	Key0 machine.Pin
-	Key1 machine.Pin
-	Key2 machine.Pin
-	Key3 machine.Pin
+	Key0   machine.Pin
+	Key1   machine.Pin
+	Key2   machine.Pin
+	Key3   machine.Pin
 }
+
 func main() {
 
 	// run light
 	runLight()
+
+	///////////////////////////////////////////////
+	// DEBUG -
+	///////////////////////////////////////////////
+	// key0 := machine.GP15
+	// key0.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+
+	// key1 := machine.GP17
+	// key1.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+
+	// for {
+
+	// 	fmt.Printf("DEBUG test key0: %v  key1: %v\n",key0.Get(), key1.Get())
+	// 	time.Sleep(time.Millisecond * 1000)
+	// }
+	///////////////////////////////////////////////
+	// DEBUG -
+	///////////////////////////////////////////////
 
 	//
 	// Configure the filter
@@ -36,17 +56,15 @@ func main() {
 	df.Key2 = machine.GP2
 	df.Key3 = machine.GP3
 
-	df.Key0.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
-	df.Key1.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
-	df.Key2.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
-	df.Key3.Configure(machine.PinConfig{Mode: machine.PinInputPulldown})
-	
+	df.Key0.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+	df.Key1.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+	df.Key2.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+	df.Key3.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
 
-	df.Key0.SetInterrupt(machine.PinFalling, func(p machine.Pin) { fmt.Println("key0"); df.Filter = "Handset";  })
-	df.Key1.SetInterrupt(machine.PinFalling, func(p machine.Pin) { fmt.Println("key1"); df.Filter = "RADriver";  })
-	df.Key2.SetInterrupt(machine.PinFalling, func(p machine.Pin) { fmt.Println("key2"); df.Filter = "XXXXX";  })
-	df.Key3.SetInterrupt(machine.PinFalling, func(p machine.Pin) { fmt.Println("key3"); df.Filter = "XXXXX";   })
-	
+	df.Key0.SetInterrupt(machine.PinFalling, func(p machine.Pin) { fmt.Println("key0"); df.Filter = "Handset" })
+	df.Key1.SetInterrupt(machine.PinFalling, func(p machine.Pin) { fmt.Println("key1"); df.Filter = "RADriver" })
+	df.Key2.SetInterrupt(machine.PinFalling, func(p machine.Pin) { fmt.Println("key2"); df.Filter = "XXXXX" })
+	df.Key3.SetInterrupt(machine.PinFalling, func(p machine.Pin) { fmt.Println("key3"); df.Filter = "XXXXX" })
 
 	/////////////////////////////////////////////////////////////////////////////
 	// Console Display
@@ -100,7 +118,6 @@ func main() {
 	// Create subscription channels
 	//
 	fooCh := make(chan msg.FooMsg)
-	logCh := make(chan msg.LogMsg)
 	handsetCh := make(chan msg.HandsetMsg)
 	raDriverCh := make(chan msg.RADriverMsg)
 
@@ -108,7 +125,6 @@ func main() {
 	// Register the channels with the broker
 	//
 	mb.SetFooCh(fooCh)
-	mb.SetLogCh(logCh)
 	mb.SetHandsetCh(handsetCh)
 	mb.SetRADriverCh(raDriverCh)
 
@@ -116,7 +132,6 @@ func main() {
 	// Start the message consumers
 	//
 	go fooConsumerRoutine(fooCh, mb, consoleCh)
-	go logConsumerRoutine(logCh, mb, consoleCh)
 	go handsetConsumerRoutine(handsetCh, mb, consoleCh)
 	go raDriverConsumerRoutine(raDriverCh, mb, consoleCh)
 
@@ -179,6 +194,7 @@ func fooConsumerRoutine(fooCh chan msg.FooMsg, mb msg.MsgBroker, consoleCh chan 
 		consoleCh <- s
 	}
 }
+
 // Read from handsetCh and write to consoleCh
 func handsetConsumerRoutine(handsetCh chan msg.HandsetMsg, mb msg.MsgBroker, consoleCh chan string) {
 
@@ -187,37 +203,21 @@ func handsetConsumerRoutine(handsetCh chan msg.HandsetMsg, mb msg.MsgBroker, con
 		consoleCh <- s
 	}
 }
+
 // Read from raDriverCh and write to consoleCh
 func raDriverConsumerRoutine(raDriverCh chan msg.RADriverMsg, mb msg.MsgBroker, consoleCh chan string) {
-	
+
 	for msg := range raDriverCh {
 		var s string = string(msg.Kind) + "\n"
-		s += string(msg.Cmd) + "\n"
+		s += string(msg.Tracking) + "\n"
 		s += string(msg.Direction) + "\n"
-		s += string(msg.Position) + "\n"
-		if msg.Tracking {
-			s += "Tracking On"
-		} else {
-			s += "Tracking Off"
-		}	 
-		
-		consoleCh <- s
-	}
-}
+		s += string(msg.Position)
 
-
-// Read from logCh and write to consoleCh
-func logConsumerRoutine(logCh chan msg.LogMsg, mb msg.MsgBroker, consoleCh chan string) {
-
-	for msg := range logCh {
-		s := fmt.Sprintf("%s: %s %s\n\n", msg.Kind, msg.Source, msg.Level)
-		s = s + msg.Body
 		consoleCh <- s
 	}
 }
 
 func consoleRoutine(display st7789.Device, ch chan string, df *DisplayFilter) {
-
 	width, height := display.Size()
 	fmt.Printf("width: %v, height: %v\n", width, height)
 
@@ -279,19 +279,17 @@ func consoleRoutine(display st7789.Device, ch chan string, df *DisplayFilter) {
 	var lastMsg string = ""
 
 	for msg := range ch {
-		// if strings.Contains(msg,df.Filter) {
-		// 	cls(&display)
-		// 	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 20, msg, green)
-		// 	fmt.Printf("[consoleRoutine] - msg:\n%v\n", msg)
-		// } else {
-		// 	fmt.Printf("[consoleRoutine] - does not match filter:\n%v\n", df.Filter)
-		// }
-			
+		if strings.Contains(msg, df.Filter) {
 			if msg != lastMsg {
 				cls(&display)
-				tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 20, msg, green)		
+				tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 20, msg, green)
 			}
-			lastMsg =  msg
+			fmt.Printf("[consoleRoutine] - msg:\n%v\n%v\n", msg, df.Filter)
+		} else {
+			fmt.Printf("[consoleRoutine] - msg:\n%v\nDOES NOT MATCH FILTER\n", msg, df.Filter)
+		}
+
+		lastMsg = msg
 	}
 
 }

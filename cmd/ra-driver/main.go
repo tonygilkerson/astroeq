@@ -79,8 +79,12 @@ func main() {
 	fooCh := make(chan msg.FooMsg)
 	mb.SetFooCh(fooCh)
 
-	raDriverCh := make(chan msg.RADriverMsg)
-	mb.SetRADriverCh(raDriverCh)
+	// DEVTODO - delete me soon if not needed, I dont think the ra-driver needs to consume this message only publish it
+	// raDriverCh := make(chan msg.RADriverMsg)
+	// mb.SetRADriverCh(raDriverCh)
+
+	raDriverCmdCh := make(chan msg.RADriverCmdMsg)
+	mb.SetRADriverCmdCh(raDriverCmdCh)
 	//
 	// Start the subscription reader, it will read from the the UARTS
 	// and then dispatch message to the proper channels
@@ -155,7 +159,7 @@ func main() {
 	// Start the message consumers
 	//
 	go fooConsumerRoutine(fooCh, &mb)
-	go raConsumerRoutine(raDriverCh, &mb, &ra)
+	go raCmdConsumeRoutine(raDriverCmdCh, &mb, &ra)
 	go raBroadcastInfoRoutine(&ra, &mb)
 
 	var position uint32 = 0
@@ -236,30 +240,27 @@ func fooConsumerRoutine(ch chan msg.FooMsg, mb *msg.MsgBroker) {
 	}
 }
 
-func raConsumerRoutine(ch chan msg.RADriverMsg, mb *msg.MsgBroker, ra *driver.RADriver) {
+func raCmdConsumeRoutine(ch chan msg.RADriverCmdMsg, mb *msg.MsgBroker, ra *driver.RADriver) {
 
-	for raMsg := range ch {
-		fmt.Printf("[ra-driver.raDriverConsumer] - raMsg: [%v]\n", raMsg)
-		raDriverCtl(raMsg, ra)
+	for raCmdMsg := range ch {
+		fmt.Printf("[raCmdConsumeRoutine] - raCmdMsg: [%v]\n", raCmdMsg)
+		raDriverCtl(raCmdMsg, ra)
 	}
 
 }
 
-func raDriverCtl(raMsg msg.RADriverMsg, ra *driver.RADriver) {
+func raDriverCtl(cmdMsg msg.RADriverCmdMsg, ra *driver.RADriver) {
 
-	switch raMsg.Cmd {
+	switch cmdMsg.Cmd {
 
-	case msg.RA_CMD_SET_DIR_NORTH:
-		ra.SetDirection(driver.RA_DIR_NORTH)
+	case msg.RA_CMD_SET_DIRECTION:
+		// The first argument is the direction "North" or "South"
+		ra.SetDirection(driver.RaValue(cmdMsg.Args[0]))
 
-	case msg.RA_CMD_SET_DIR_SOUTH:
-		ra.SetDirection(driver.RA_DIR_SOUTH)
+	case msg.RA_CMD_SET_TRACKING:
+		// The first argument is the tracking "On" or "Off"
+		ra.SetTracking(driver.RaValue(cmdMsg.Args[0]))
 
-	case msg.RA_CMD_TRACKING_ON:
-		ra.SetTracking(true)
-
-	case msg.RA_CMD_TRACKING_OFF:
-		ra.SetTracking(false)
 	}
 }
 
@@ -268,13 +269,12 @@ func raBroadcastInfoRoutine(ra *driver.RADriver, mb *msg.MsgBroker) {
 	for {
 		var raMsg msg.RADriverMsg
 		raMsg.Kind = msg.MSG_RADRIVER
-		raMsg.Cmd = msg.RA_CMD_INFO
 		raMsg.Tracking = ra.GetTracking()
 		raMsg.Direction = ra.GetDirection()
 		raMsg.Position = ra.GetPosition()
 
 		mb.PublishRADriver(raMsg)
 
-		time.Sleep(time.Millisecond * 1000)
+		time.Sleep(time.Millisecond * 900)
 	}
 }

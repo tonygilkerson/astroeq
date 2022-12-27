@@ -248,20 +248,14 @@ func runLight() {
 
 func handsetStateMachineRoutine(hs *hid.Handset, keyStrokesCh chan hid.Key, mb *msg.MsgBroker) {
 
-	// status bar
-
 	// Menu interaction
 	var noKey hid.Key
 
 	hs.Screen.BodyText = hs.StateMachine(noKey)
-	hs.Screen.PrevBodyText = ""
-
 	hs.RenderScreen()
 
 	for k := range keyStrokesCh {
 
-		// DEVTODO - create a SetBodyText that set the prev for you, hide this crap
-		hs.Screen.PrevBodyText = hs.Screen.BodyText
 		hs.Screen.BodyText = hs.StateMachine(k)
 		hs.RenderScreen()
 
@@ -281,16 +275,10 @@ func raDriverConsumerRoutine(hs *hid.Handset, ch chan msg.RADriverMsg, mb *msg.M
 	for raMsg := range ch {
 		fmt.Printf("[handset.raDriverConsumerRoutine] - msg: [%v]\n", raMsg)
 
-		// We are only interested in raDriver info messages
-		if raMsg.Cmd != msg.RA_CMD_INFO {
-			continue
-		}
-
 		hs.Screen.Tracking = raMsg.Tracking
 		hs.Screen.Direction = raMsg.Direction
 		hs.Screen.Position = raMsg.Position
 
-		// DEVTODO - make this a render status not the entire screen
 		hs.RenderScreen()
 
 	}
