@@ -16,12 +16,24 @@ import (
 	"github.com/tonygilkerson/astroeq/pkg/msg"
 )
 
+const SCREEN_MAX_LINES int = 14
+
 type DisplayFilter struct {
-	Filter string // Foo | Handset | RADriver | RADriverCmd
-	Key0   machine.Pin
-	Key1   machine.Pin
-	Key2   machine.Pin
-	Key3   machine.Pin
+	Txt     string // Foo | Handset | RADriver | RADriverCmd
+	PrevTxt string
+	Key0    machine.Pin
+	Key1    machine.Pin
+	Key2    machine.Pin
+	Key3    machine.Pin
+}
+
+type Screen struct {
+	Lines     [SCREEN_MAX_LINES]string
+	PrevLines [SCREEN_MAX_LINES]string
+	LinePtr   int // Index used when adding a new line
+	Filter    DisplayFilter
+	display   st7789.Device
+	ch        chan Screen
 }
 
 func main() {
@@ -47,52 +59,18 @@ func main() {
 	// DEBUG -
 	///////////////////////////////////////////////
 
-	//
-	// Configure the filter
-	//
-	var df DisplayFilter
-	df.Key0 = machine.GP15
-	df.Key1 = machine.GP17
-	df.Key2 = machine.GP2
-	df.Key3 = machine.GP3
-
-	df.Key0.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
-	df.Key1.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
-	df.Key2.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
-	df.Key3.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
-
-	df.Key0.SetInterrupt(machine.PinFalling, func(p machine.Pin) {
-		fmt.Println("key0")
-		df.Filter = "RADriverCmd"
-	})
-
-	df.Key1.SetInterrupt(machine.PinFalling, func(p machine.Pin) {
-		fmt.Println("key1")
-		df.Filter = "RADriver"
-	})
-
-	df.Key2.SetInterrupt(machine.PinFalling, func(p machine.Pin) {
-		fmt.Println("key2")
-		df.Filter = "Handset"
-	})
-
-	df.Key3.SetInterrupt(machine.PinFalling, func(p machine.Pin) {
-		fmt.Println("key3")
-		df.Filter = ""
-	})
-
 	/////////////////////////////////////////////////////////////////////////////
 	// Console Display
 	/////////////////////////////////////////////////////////////////////////////
 
 	machine.SPI1.Configure(machine.SPIConfig{
-		Frequency: 9_000_000,
-		LSBFirst:  false,
-		Mode:      0,
-		DataBits:  0,
-		SCK:       machine.GP10,
-		SDO:       machine.GP11,
-		SDI:       machine.GP28, // I don't think this is actually used for LCD, just assign to any open pin
+		Frequency: 8_000_000,
+		// LSBFirst:  false,
+		Mode: 0,
+		// DataBits:  0,
+		SCK: machine.GP10,
+		SDO: machine.GP11,
+		SDI: machine.GP28, // I don't think this is actually used for LCD, just assign to any open pin
 	})
 
 	// machine.SPI1.SetBaudRate(60_000_000)
@@ -106,17 +84,15 @@ func main() {
 	display.Configure(st7789.Config{
 		// With the display in portrait and the usb socket on the left and in the back
 		// the actual width and height are switched width=320 and height=240
-		Width:        240,
-		Height:       320,
-		Rotation:     st7789.ROTATION_90,
+		Width:  240,
+		Height: 320,
+		// Rotation:     st7789.ROTATION_90,
+		Rotation:     st7789.NO_ROTATION,
 		RowOffset:    0,
 		ColumnOffset: 0,
-		// FrameRate:    st7789.FRAMERATE_111,
-		// VSyncLines:   st7789.MAX_VSYNC_SCANLINES,
-
+		FrameRate:    st7789.FRAMERATE_111,
+		VSyncLines:   st7789.MAX_VSYNC_SCANLINES,
 	})
-
-	consoleCh := make(chan string)
 
 	/////////////////////////////////////////////////////////////////////////////
 	// Broker
@@ -149,12 +125,60 @@ func main() {
 	mb.SetRADriverCmdCh(raDriverCmdCh)
 
 	//
-	// Start the message consumers
+	// Create the screen
 	//
-	go fooConsumerRoutine(fooCh, mb, consoleCh)
-	go handsetConsumerRoutine(handsetCh, mb, consoleCh)
-	go raDriverConsumerRoutine(raDriverCh, mb, consoleCh)
-	go raDriverCmdConsumerRoutine(raDriverCmdCh, mb, consoleCh)
+	var screen Screen
+	screen.ch = make(chan Screen)
+	screen.display = display
+
+	//
+	// Configure the filter
+	//
+	screen.Filter.Key0 = machine.GP15
+	screen.Filter.Key1 = machine.GP17
+	screen.Filter.Key2 = machine.GP2
+	screen.Filter.Key3 = machine.GP3
+
+	screen.Filter.Key0.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+	screen.Filter.Key1.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+	screen.Filter.Key2.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+	screen.Filter.Key3.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
+
+	screen.Filter.Key0.SetInterrupt(machine.PinFalling, func(p machine.Pin) {
+		fmt.Println("key0 - RADriverCmd")
+		screen.Filter.Txt = "RADriverCmd"
+		screen.ClearLines()
+		screen.WriteStatus()
+	})
+
+	screen.Filter.Key1.SetInterrupt(machine.PinFalling, func(p machine.Pin) {
+		fmt.Println("key1 - RADriver")
+		screen.Filter.Txt = "RADriver"
+		screen.ClearLines()
+		screen.WriteStatus()
+	})
+
+	screen.Filter.Key2.SetInterrupt(machine.PinFalling, func(p machine.Pin) {
+		fmt.Println("key2 - Handset")
+		screen.Filter.Txt = "Handset"
+		screen.ClearLines()
+		screen.WriteStatus()
+	})
+
+	screen.Filter.Key3.SetInterrupt(machine.PinFalling, func(p machine.Pin) {
+		fmt.Println("key3 - ANY")
+		screen.Filter.Txt = "*ANY"
+		screen.ClearLines()
+		screen.WriteStatus()
+	})
+
+	//
+	// Start the routines
+	//
+	go screen.fooConsumerRoutine(fooCh, mb)
+	go screen.handsetConsumerRoutine(handsetCh, mb)
+	go screen.raDriverConsumerRoutine(raDriverCh, mb)
+	go screen.raDriverCmdConsumerRoutine(raDriverCmdCh, mb)
 
 	//
 	// Start the subscription reader, it will read from the the UARTS
@@ -164,9 +188,7 @@ func main() {
 	/////////////////////////////////////////////////////////////////////////////
 	// writeConsole
 	/////////////////////////////////////////////////////////////////////////////
-
-	go consoleRoutine(display, consoleCh, &df)
-	go checkFilterRoutine(consoleCh, &df)
+	go screen.consoleRoutine()
 
 	//
 	// Keep main live
@@ -202,122 +224,171 @@ func paintScreen(c color.RGBA, d *st7789.Device, s int16) {
 	}
 }
 
-func cls(d *st7789.Device) {
-	// green := color.RGBA{0, 255, 0, 255}
-	black := color.RGBA{0, 0, 0, 255}
-	d.FillScreen(black)
-
-}
-
-// Read from fooCh and write to consoleCh
-func fooConsumerRoutine(fooCh chan msg.FooMsg, mb msg.MsgBroker, consoleCh chan string) {
+// Read from fooCh and write to screenCh
+func (screen *Screen) fooConsumerRoutine(fooCh chan msg.FooMsg, mb msg.MsgBroker) {
 
 	for msg := range fooCh {
-		txt := fmt.Sprintf("Kind: %s\nName: %s", msg.Kind, msg.Name)
-		consoleCh <- txt
+
+		screen.StartLines()
+		screen.SetLine(fmt.Sprintf("Kind: %v", msg.Kind))
+		screen.SetLine(fmt.Sprintf("Name: %v", msg.Name))
+		screen.EndLines()
+		screen.ch <- *screen
+
 	}
 }
 
-// Read from handsetCh and write to consoleCh
-func handsetConsumerRoutine(handsetCh chan msg.HandsetMsg, mb msg.MsgBroker, consoleCh chan string) {
+// Read from handsetCh and write to screenCh
+func (screen *Screen) handsetConsumerRoutine(handsetCh chan msg.HandsetMsg, mb msg.MsgBroker) {
 
 	for msg := range handsetCh {
-		txt := fmt.Sprintf("Kind: %v\nKeys: %v", msg.Kind, msg.Keys)
-		consoleCh <- txt
+
+		screen.StartLines()
+		screen.SetLine(fmt.Sprintf("Kind: %v", msg.Kind))
+		screen.SetLine(fmt.Sprintf("Keys: %v", msg.Keys))
+		screen.EndLines()
+		screen.ch <- *screen
+
 	}
 }
 
-// Read from raDriverCh and write to consoleCh
-func raDriverConsumerRoutine(raDriverCh chan msg.RADriverMsg, mb msg.MsgBroker, consoleCh chan string) {
+// Read from raDriverCh and write to screenCh
+func (screen *Screen) raDriverConsumerRoutine(raDriverCh chan msg.RADriverMsg, mb msg.MsgBroker) {
 
 	for msg := range raDriverCh {
-		txt := fmt.Sprintf("Kind: %v\nTracking: %v\nDirection: %v\nPosition: %v", msg.Kind, msg.Tracking, msg.Direction, msg.Position)
-		consoleCh <- txt
+
+		screen.StartLines()
+		screen.SetLine(fmt.Sprintf("Kind: %v", msg.Kind))
+		screen.SetLine(fmt.Sprintf("Tracking: %v", msg.Tracking))
+		screen.SetLine(fmt.Sprintf("Direction: %v", msg.Direction))
+		screen.SetLine(fmt.Sprintf("Position: %v", msg.Position))
+		screen.EndLines()
+		screen.ch <- *screen
+
 	}
 }
 
-// Read from raDriverCmdCh and write to consoleCh
-func raDriverCmdConsumerRoutine(raDriverCmdCh chan msg.RADriverCmdMsg, mb msg.MsgBroker, consoleCh chan string) {
+// Read from raDriverCmdCh and write to screenCh
+func (screen *Screen) raDriverCmdConsumerRoutine(raDriverCmdCh chan msg.RADriverCmdMsg, mb msg.MsgBroker) {
 
 	for msg := range raDriverCmdCh {
-		txt := fmt.Sprintf("Kind: %v\nCmd: %v\nArgs: %v", msg.Kind, msg.Cmd, msg.Args)
-		consoleCh <- txt
+		screen.StartLines()
+		screen.SetLine(fmt.Sprintf("Kind: %v", msg.Kind))
+		screen.SetLine(fmt.Sprintf("Cmd: %v", msg.Cmd))
+		screen.SetLine(fmt.Sprintf("Args: %v", msg.Args))
+		screen.EndLines()
+		screen.ch <- *screen
 	}
+
 }
 
-func consoleRoutine(display st7789.Device, ch chan string, df *DisplayFilter) {
-	width, height := display.Size()
-	fmt.Printf("width: %v, height: %v\n", width, height)
+func (screen *Screen) consoleRoutine() {
 
-	//red := color.RGBA{126, 0, 0, 255}
-	red := color.RGBA{255, 0, 0, 255}
-	// black := color.RGBA{0, 0, 0, 255}
+	// red := color.RGBA{255, 0, 0, 255}
+	black := color.RGBA{0, 0, 0, 255}
 	// white := color.RGBA{255, 255, 255, 255}
 	// blue := color.RGBA{0, 0, 255, 255}
-	green := color.RGBA{0, 255, 0, 255}
+	// green := color.RGBA{0, 255, 0, 255}
 	// greenDim := color.RGBA{0, 126, 0, 255}
 
-	cls(&display)
-	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 20, "123456789-123456789-x", red)
-	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 40, "Ready...2", red)
-	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 60, "Ready...3", red)
-	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 80, "Ready...4", red)
-	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 100, "Ready...5", red)
-	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 120, "Ready...6", red)
-	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 140, "Ready...7", red)
-	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 160, "Ready...8", red)
-	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 180, "Ready...9", red)
-	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 200, "Ready...10", red)
-	tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 220, "Ready...11", red)
+	screen.display.FillScreen(black)
 
-	var lastMsg string = ""
-	var lastMsgTime time.Time = time.Now()
+	// var lastMsgTime time.Time = time.Now()
 
-	for msg := range ch {
+	for screen := range screen.ch {
 
 		//
-		// If no filter or if filter text if found
+		// If no filter or filter text is found
 		//
-		if len(df.Filter) == 0 || strings.Contains(msg, df.Filter) {
+		if screen.Filter.Txt == "*ANY" || screen.SearchLines(screen.Filter.Txt) {
 
 			//
 			// Don't redraw screen if the message is the same
 			// Also the messages come in faster than the screen can redraw so only redraw every so often
 			// This means that not all messages get displayed
 			//
-			if msg != lastMsg && (time.Since(lastMsgTime) > time.Duration(time.Second*3)) {
-				lastMsgTime = time.Now()
+			// if (time.Since(lastMsgTime) > time.Duration(time.Second*1)) {
 
-				cls(&display)
+			// lastMsgTime = time.Now()
+			screen.WriteLines()
+			// pause for bit so I can see the screen before it refreshes
+			// time.Sleep(time.Millisecond * 500)
 
-				// txt := fmt.Sprintf("Filter: [%v]\n%v",df.Filter,lastMsg)
-				// tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 20, txt, black)
-
-				txt := fmt.Sprintf("Filter: [%v]\n%v", df.Filter, msg)
-				tinyfont.WriteLine(&display, &freemono.Regular12pt7b, 5, 20, txt, green)
-
-				// pause for bit so I can see the screen before it refreshes
-				time.Sleep(time.Millisecond * 1000)
-			}
+			// }
 
 		}
-
-		lastMsg = msg
 
 	}
 
 }
 
-func checkFilterRoutine(ch chan string, df *DisplayFilter) {
+func (screen *Screen) SetLine(txt string) {
 
-	var lastFilter string = ""
+	screen.PrevLines[screen.LinePtr] = screen.Lines[screen.LinePtr]
+	screen.Lines[screen.LinePtr] = txt
+	screen.LinePtr++
 
-	for {
-		if df.Filter != lastFilter {
-			ch <- "Filter changed to:\n" + df.Filter
+}
+
+func (screen *Screen) WriteStatus() {
+	yellow := color.RGBA{255, 255, 0, 255}
+	black := color.RGBA{0, 0, 0, 255}
+	var x, y int16 = 5, 20
+	screen.display.FillRectangle(x, y-15, 234, 20, black)
+
+	var status string
+	status = fmt.Sprintf("F: %v ch: %v", screen.Filter.Txt, len(screen.ch))
+	tinyfont.WriteLine(&screen.display, &freemono.Regular9pt7b, x, y, status, yellow)
+
+}
+
+func (screen *Screen) SearchLines(txt string) bool {
+
+	for i := 0; i < SCREEN_MAX_LINES; i++ {
+
+		if len(screen.Lines[i]) > 0 && len(txt) > 0 && strings.Contains(screen.Lines[i], txt) {
+			fmt.Printf("DEBUG3 - line [%v] \tfilter[%v]\n", screen.Lines[i], txt)
+			return true
 		}
+	}
 
-		lastFilter = df.Filter
-		time.Sleep(time.Millisecond * 500)
+	return false
+}
+
+func (screen *Screen) WriteLines() {
+
+	green := color.RGBA{0, 255, 0, 255}
+	//red := color.RGBA{255, 0, 0, 20}
+	black := color.RGBA{0, 0, 0, 255}
+
+	var x, y int16
+	// tinyfont.WriteLine(display, &freemono.Regular9pt7b, 5, 20, screen.Lines[0], green)
+	// display.FillRectangle(x,y-15,234,20,red)
+
+	for i := 0; i < SCREEN_MAX_LINES; i++ {
+		fmt.Printf("DEBUG1 - screen.Lines[%v]=[%v], \tscreen.PrevLines[%v]=[%v]\n", i, screen.Lines[i], i, screen.PrevLines[i])
+		if screen.Lines[i] != screen.PrevLines[i] {
+			x = 5
+			y = int16((20 * i) + 40)
+			screen.display.FillRectangle(x, y-15, 234, 20, black)
+			tinyfont.WriteLine(&screen.display, &freemono.Regular9pt7b, x, y, screen.Lines[i], green)
+		}
+	}
+
+}
+
+func (screen *Screen) ClearLines() {
+	screen.LinePtr = 0
+	screen.EndLines()
+}
+
+func (screen *Screen) StartLines() {
+	screen.LinePtr = 0
+}
+
+func (screen *Screen) EndLines() {
+
+	for i := screen.LinePtr; i < SCREEN_MAX_LINES; i++ {
+		screen.SetLine("")
 	}
 }
