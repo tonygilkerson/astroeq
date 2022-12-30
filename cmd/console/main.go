@@ -41,24 +41,6 @@ func main() {
 	// run light
 	runLight()
 
-	///////////////////////////////////////////////
-	// DEBUG -
-	///////////////////////////////////////////////
-	// key0 := machine.GP15
-	// key0.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
-
-	// key1 := machine.GP17
-	// key1.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
-
-	// for {
-
-	// 	fmt.Printf("DEBUG test key0: %v  key1: %v\n",key0.Get(), key1.Get())
-	// 	time.Sleep(time.Millisecond * 1000)
-	// }
-	///////////////////////////////////////////////
-	// DEBUG -
-	///////////////////////////////////////////////
-
 	/////////////////////////////////////////////////////////////////////////////
 	// Console Display
 	/////////////////////////////////////////////////////////////////////////////
@@ -293,8 +275,6 @@ func (screen *Screen) consoleRoutine() {
 
 	screen.display.FillScreen(black)
 
-	// var lastMsgTime time.Time = time.Now()
-
 	for screen := range screen.ch {
 
 		//
@@ -302,19 +282,7 @@ func (screen *Screen) consoleRoutine() {
 		//
 		if screen.Filter.Txt == "*ANY" || screen.SearchLines(screen.Filter.Txt) {
 
-			//
-			// Don't redraw screen if the message is the same
-			// Also the messages come in faster than the screen can redraw so only redraw every so often
-			// This means that not all messages get displayed
-			//
-			// if (time.Since(lastMsgTime) > time.Duration(time.Second*1)) {
-
-			// lastMsgTime = time.Now()
 			screen.WriteLines()
-			// pause for bit so I can see the screen before it refreshes
-			// time.Sleep(time.Millisecond * 500)
-
-			// }
 
 		}
 
@@ -347,7 +315,6 @@ func (screen *Screen) SearchLines(txt string) bool {
 	for i := 0; i < SCREEN_MAX_LINES; i++ {
 
 		if len(screen.Lines[i]) > 0 && len(txt) > 0 && strings.Contains(screen.Lines[i], txt) {
-			fmt.Printf("DEBUG3 - line [%v] \tfilter[%v]\n", screen.Lines[i], txt)
 			return true
 		}
 	}
@@ -366,7 +333,6 @@ func (screen *Screen) WriteLines() {
 	// display.FillRectangle(x,y-15,234,20,red)
 
 	for i := 0; i < SCREEN_MAX_LINES; i++ {
-		fmt.Printf("DEBUG1 - screen.Lines[%v]=[%v], \tscreen.PrevLines[%v]=[%v]\n", i, screen.Lines[i], i, screen.PrevLines[i])
 		if screen.Lines[i] != screen.PrevLines[i] {
 			x = 5
 			y = int16((20 * i) + 40)

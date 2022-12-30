@@ -279,6 +279,7 @@ func raDriverConsumerRoutine(hs *hid.Handset, ch chan msg.RADriverMsg, mb *msg.M
 		hs.Screen.Direction = raMsg.Direction
 		hs.Screen.Position = raMsg.Position
 
+		hs.Screen.BodyText = hs.StateMachine(hid.KEY_REFRESH)
 		hs.RenderScreen()
 
 	}

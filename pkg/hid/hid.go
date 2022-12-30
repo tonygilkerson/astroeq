@@ -26,16 +26,17 @@ const LOCATION_ELEVATION = "+270"
 type State uint8
 
 const (
-	FIRST State = iota
+	ZERO State = iota
+	FIRST
 	SHOW_VERSION
-	SET_RA_TRACKING
-	SET_RA_DIRECTION
 	SET_DATE
 	SET_TIME
 	SET_LATITUDE
 	SET_LONGITUDE
 	SET_ELEVATION
 	UTILITY_MENU
+	SET_RA_TRACKING
+	SET_RA_DIRECTION
 	OBJECTS_MENU
 	LAST
 	SET_DATE_Error
@@ -69,6 +70,7 @@ const (
 	KEY_ESC
 	KEY_SETUP
 	KEY_ENTER
+	KEY_REFRESH
 )
 
 // The Handset properties are maintained by the user via the handset.
@@ -357,6 +359,8 @@ func (hs *Handset) GetKeyString(k Key) string {
 		return "Setup"
 	case KEY_ENTER:
 		return "Enter"
+	case KEY_REFRESH:
+		return "Refresh"
 	default:
 		return "Undefined"
 	}
@@ -402,6 +406,8 @@ func (hs *Handset) GetKeyFromString(s string) Key {
 		return KEY_SETUP
 	case "Enter":
 		return KEY_ENTER
+	case "Refresh":
+		return KEY_REFRESH
 	default:
 		return KEY_UNDEFINED
 	}
@@ -411,14 +417,19 @@ func (hs *Handset) StateMachine(key Key) string {
 
 	switch hs.state {
 
+	case ZERO:
+		doNav(key, &hs.state)
+
 	case FIRST:
 
-		if key == KEY_ONE {
-			hs.state++
-		} else if key == KEY_TWO {
-			hs.state = UTILITY_MENU
-		} else if key == KEY_THREE {
-			hs.state = OBJECTS_MENU
+		if !doNav(key, &hs.state) {
+			if key == KEY_ONE {
+				hs.state++
+			} else if key == KEY_TWO {
+				hs.state = UTILITY_MENU
+			} else if key == KEY_THREE {
+				hs.state = OBJECTS_MENU
+			}
 		}
 
 	case SHOW_VERSION:
@@ -442,10 +453,10 @@ func (hs *Handset) StateMachine(key Key) string {
 		if !doNav(key, &hs.state) {
 			if key == KEY_ONE {
 				hs.msgBroker.PublishRACmdSetDirection(driver.RA_DIRECTION_NORTH)
-				hs.state++
+				hs.state = UTILITY_MENU
 			} else if key == KEY_TWO {
 				hs.msgBroker.PublishRACmdSetDirection(driver.RA_DIRECTION_SOUTH)
-				hs.state++
+				hs.state = UTILITY_MENU
 			}
 		}
 
@@ -611,6 +622,8 @@ func (hs *Handset) StateMachine(key Key) string {
 
 		if key == KEY_ESC {
 			hs.state = FIRST
+		} else if key == KEY_ONE {
+			hs.state++
 		}
 
 	case OBJECTS_MENU:
@@ -632,6 +645,9 @@ func (hs *Handset) StateMachine(key Key) string {
 	//  11 char per line at Regular9pt7b
 	//
 	switch hs.state {
+	case ZERO:
+		hs.dspOut = fmt.Sprintf("RA: %v", hs.Screen.Position)
+
 	case FIRST:
 
 		hs.dspOut = "1 Setup\n" +
@@ -674,7 +690,9 @@ func (hs *Handset) StateMachine(key Key) string {
 		hs.dspOut = "Set\nElevation\n+DDDD\n-----------\n" + hs.locationElevationStr
 
 	case UTILITY_MENU:
-		hs.dspOut = "Utility\nMenu\n\nTODO\n"
+		hs.dspOut = "1 RA Setup\n" +
+			"2 todo\n" +
+			"\n"
 
 	case OBJECTS_MENU:
 		hs.dspOut = "Objects\nMenu\n\nTODO\n"
@@ -777,7 +795,7 @@ func doNav(key Key, state *State) bool {
 
 	if key == KEY_ESC {
 
-		if *state > FIRST {
+		if *state > ZERO {
 			*state--
 		}
 		return true

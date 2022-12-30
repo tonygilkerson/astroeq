@@ -160,7 +160,7 @@ func main() {
 	//
 	go fooConsumerRoutine(fooCh, &mb)
 	go raCmdConsumeRoutine(raDriverCmdCh, &mb, &ra)
-	go raBroadcastInfoRoutine(&ra, &mb)
+	go raPublishInfoRoutine(&ra, &mb)
 
 	var position uint32 = 0
 	var lastPosition int = 0
@@ -264,7 +264,7 @@ func raDriverCtl(cmdMsg msg.RADriverCmdMsg, ra *driver.RADriver) {
 	}
 }
 
-func raBroadcastInfoRoutine(ra *driver.RADriver, mb *msg.MsgBroker) {
+func raPublishInfoRoutine(ra *driver.RADriver, mb *msg.MsgBroker) {
 
 	for {
 		var raMsg msg.RADriverMsg
@@ -275,6 +275,6 @@ func raBroadcastInfoRoutine(ra *driver.RADriver, mb *msg.MsgBroker) {
 
 		mb.PublishRADriver(raMsg)
 
-		time.Sleep(time.Millisecond * 900)
+		time.Sleep(time.Second * 2)
 	}
 }
