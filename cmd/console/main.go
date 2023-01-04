@@ -195,7 +195,6 @@ func runLight() {
 	led.High()
 }
 
-
 // Read from fooCh and write to screenCh
 func (screen *Screen) fooConsumerRoutine(fooCh chan msg.FooMsg, mb msg.MsgBroker) {
 

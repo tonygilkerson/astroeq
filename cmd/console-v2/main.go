@@ -200,14 +200,14 @@ func runLight() {
 }
 
 // DEBUG
-func printGrid(grid grid.Grid) {
+func  printGrid(grid grid.Grid) {
 
-	for _, row := range grid.Cells {
+	for _, row := range grid.GetCells() {
 		// fmt.Printf("row: %v\n", r)
 
 		for _, cell := range row {
 
-			fmt.Printf("[%c|%c|%v] \t", cell.Char, cell.PrevChar, cell.IsDirty)
+			fmt.Printf("[%c|%c|%v] \t", cell.GetChar(), cell.GetPrevChar(), cell.IsDirty())
 		}
 		fmt.Println("--")
 	}
@@ -229,14 +229,15 @@ func (screen *Screen) WriteLines() {
 	var x, y int16
 	black := color.RGBA{0, 0, 0, 255}
 
-	for r, row := range screen.grid.Cells {
+	for r, row := range screen.grid.GetCells() {
 		for c, col := range row {
 			cell := col
-			x = int16(screen.grid.Width*c) + 5
-			y = int16(screen.grid.Height*r) + 20
-			if cell.IsDirty {
-				tinyfont.WriteLine(&screen.displayDevice, &screen.font, x, y, string(screen.grid.Cells[r][c].PrevChar), black) // erase the previous character
-				tinyfont.WriteLine(&screen.displayDevice, &screen.font, x, y, string(screen.grid.Cells[r][c].Char), screen.fontColor)
+			x = int16(screen.grid.GetWidth()*c) + 5
+			y = int16(screen.grid.GetHeight()*r) + 20
+			if cell.IsDirty() {
+				cells := screen.grid.GetCells()
+				tinyfont.WriteLine(&screen.displayDevice, &screen.font, x, y, string(cells[r][c].GetPrevChar()), black) // erase the previous character
+				tinyfont.WriteLine(&screen.displayDevice, &screen.font, x, y, string(cells[r][c].GetChar()), screen.fontColor)
 			}
 		}
 	}
@@ -282,7 +283,7 @@ func (screen *Screen) raDriverConsumerRoutine(raDriverCh chan msg.RADriverMsg, m
 		bodyText += fmt.Sprintf("Position: %v", msg.Position)
 		screen.BodyText = bodyText
 
-		fmt.Printf("DEBUG-raDriverConsumerRoutine - %v \n",bodyText)
+		fmt.Printf("DEBUG-raDriverConsumerRoutine - %v \n", bodyText)
 
 		screen.ch <- *screen
 
@@ -324,7 +325,7 @@ func (screen *Screen) consoleRoutine() {
 			//DEVTODO break status out to it own thing
 			screen.grid.LoadGrid(screen.StatusText + "\n" + screen.BodyText)
 			screen.WriteLines()
-			fmt.Printf("DEBUG-1 - %v \t %v\n",screen.StatusText,screen.BodyText)
+			fmt.Printf("DEBUG-1 - %v \t %v\n", screen.StatusText, screen.BodyText)
 
 		}
 

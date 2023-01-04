@@ -6,11 +6,10 @@ import (
 	"github.com/tonygilkerson/astroeq/pkg/grid"
 )
 
-func main(){
+func main() {
 
 	var grid grid.Grid
-	grid.Configure(3,4,1,1)
-	
+	grid.Configure(3, 4, 1, 1)
 
 	grid.LoadGrid("AAAA\nBBBB\nCCCC")
 	printGrid(grid)
@@ -21,12 +20,12 @@ func main(){
 
 func printGrid(grid grid.Grid) {
 
-	for _, row := range grid.Cells {
+	for _, row := range grid.GetCells() {
 		// fmt.Printf("row: %v\n", r)
 
-		for _, cell := range row{
+		for _, cell := range row {
 
-			fmt.Printf("[%c|%c] \t", cell.Char,cell.PrevChar)
+			fmt.Printf("[%c|%c] \t", cell.GetChar(), cell.GetPrevChar())
 		}
 		fmt.Println("--")
 	}
