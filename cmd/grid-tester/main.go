@@ -9,11 +9,13 @@ import (
 func main() {
 
 	var grid grid.Grid
-	grid.Configure(3, 4, 1, 1)
+	grid.Configure(3, 4)
 
 	grid.LoadGrid("AAAA\nBBBB\nCCCC")
 	printGrid(grid)
-	grid.LoadGrid("aaa\nbbb\ncccc")
+	// grid.LoadGrid("aaaa\nbbbb\ncccc")
+	// printGrid(grid)
+	grid.LoadGrid("1111\n")
 	printGrid(grid)
 
 }
@@ -27,6 +29,7 @@ func printGrid(grid grid.Grid) {
 
 			fmt.Printf("[%c|%c] \t", cell.GetChar(), cell.GetPrevChar())
 		}
-		fmt.Println("--")
+		fmt.Printf("\n")
 	}
+	fmt.Printf("-----------------------------------------------\n")
 }

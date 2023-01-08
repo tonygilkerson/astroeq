@@ -25,7 +25,7 @@ clean:
 
 .PHONY:fmt
 fmt:
-	# go fmt ./...
+	go fmt ./...
 	goimports -l -w .
 
 .PHONY:lint

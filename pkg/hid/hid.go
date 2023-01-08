@@ -9,9 +9,9 @@ import (
 
 	"tinygo.org/x/drivers/ssd1351"
 	"tinygo.org/x/tinyfont"
-	"tinygo.org/x/tinyfont/freemono"
 
 	"github.com/tonygilkerson/astroeq/pkg/driver"
+	"github.com/tonygilkerson/astroeq/pkg/grid"
 	"github.com/tonygilkerson/astroeq/pkg/msg"
 )
 
@@ -146,21 +146,24 @@ type Handset struct {
 
 // The Screen properties are used to determine what is written to the display
 type Screen struct {
-	displayDevice     *ssd1351.Device
-	font              *tinyfont.Font
-	fontColor         color.RGBA
-	statusBarText     string
-	BodyText          string
-	prevStatusBarText string
-	prevBodyText      string
-	Tracking          driver.RaValue
-	Direction         driver.RaValue
-	Position          uint32
+	grid          grid.Grid
+	displayDevice ssd1351.Device
+	font          tinyfont.Font
+	fontColor     color.RGBA
+	BodyText      string
+	// RA Data
+	Tracking  driver.RaValue
+	Direction driver.RaValue
+	Position  uint32
 }
 
 // Returns a new Handset
 func NewHandset(
-	displayDevice *ssd1351.Device,
+	displayDevice ssd1351.Device,
+	font tinyfont.Font,
+	fontColor color.RGBA,
+	displayRows int,
+	displayCols int,
 	msgBroker *msg.MsgBroker,
 	zeroKey machine.Pin,
 	oneKey machine.Pin,
@@ -187,7 +190,13 @@ func NewHandset(
 ) (Handset, error) {
 
 	var screen Screen
+	var grid grid.Grid
+
 	screen.displayDevice = displayDevice
+	screen.grid = grid
+	screen.grid.Configure(displayRows, displayCols)
+	screen.font = font
+	screen.fontColor = fontColor
 
 	return Handset{
 		Screen:               &screen,
@@ -230,13 +239,6 @@ func NewHandset(
 // starts a go routine to listen for key strokes and publishes each to the key chan
 // the key channel is returned for key stroke subscribers
 func (hs *Handset) Configure() chan Key {
-
-	//
-	// Init Screen
-	//
-	hs.Screen.font = &freemono.Regular9pt7b
-	hs.Screen.fontColor = color.RGBA{0, 0, 255, 255} // RED
-	hs.Screen.statusBarText = "IgGLpq|X"
 
 	//
 	// Configure Key Pins
@@ -707,9 +709,7 @@ func (hs *Handset) StateMachine(key Key) string {
 
 	return hs.dspOut
 }
-
-func (hs *Handset) RenderScreen() {
-
+func (hs *Handset) GetStatusLine() string {
 	status := []byte{' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '}
 
 	//
@@ -732,35 +732,39 @@ func (hs *Handset) RenderScreen() {
 		status[1] = 'S'
 	}
 
-	statusText := fmt.Sprintf("%s\n-----------", status)
-	hs.Screen.prevStatusBarText = hs.Screen.statusBarText
-	hs.Screen.statusBarText = statusText
+	return string(status)
+}
 
-	// If no change then get out! Don't make the screen flicker
-	if hs.Screen.statusBarText == hs.Screen.prevStatusBarText && hs.Screen.BodyText == hs.Screen.prevBodyText {
-		return
+func (hs *Handset) RenderScreen() {
+
+	hs.Screen.grid.LoadGrid(hs.GetStatusLine() + "\n-----------\n" + hs.Screen.BodyText)
+	hs.Screen.WriteLines()
+
+}
+
+
+func (screen *Screen) WriteLines() {
+
+	var x, y int16
+	black := color.RGBA{0, 0, 0, 255}
+
+	for r, row := range screen.grid.GetCells() {
+		for c, col := range row {
+			cell := col
+			// DEVTODO might need to add width and height back, also the x and y seem backward do I have the screen rotated
+			//         undo the hard code when you figure it out
+			x = int16(10*c) + 10
+			y = int16(15*r) + 15
+		
+			// x = int16(screen.grid.GetWidth()*c) + 5
+			// y = int16(screen.grid.GetHeight()*r) + 20
+			if cell.IsDirty() {
+				cells := screen.grid.GetCells()
+				tinyfont.WriteLine(&screen.displayDevice, &screen.font, x, y, string(cells[r][c].GetPrevChar()), black) // erase the previous character
+				tinyfont.WriteLine(&screen.displayDevice, &screen.font, x, y, string(cells[r][c].GetChar()), screen.fontColor)
+			}
+		}
 	}
-
-	// DEVTODO - try to do better than clearing the screen each time
-	hs.Screen.displayDevice.FillScreen(color.RGBA{0, 0, 0, 0})
-
-	// Status Bar
-	tinyfont.WriteLine(
-		hs.Screen.displayDevice,
-		hs.Screen.font,
-		3, 10,
-		statusText,
-		hs.Screen.fontColor)
-
-	// Body
-	tinyfont.WriteLine(
-		hs.Screen.displayDevice,
-		hs.Screen.font,
-		3, 45,
-		hs.Screen.BodyText,
-		hs.Screen.fontColor)
-
-	hs.Screen.prevBodyText = hs.Screen.BodyText
 }
 
 // Util functions

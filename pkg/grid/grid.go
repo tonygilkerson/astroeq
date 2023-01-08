@@ -17,30 +17,24 @@ type Cell struct {
 }
 
 type Grid struct {
-	cells  [][]Cell
-	rows   int
-	cols   int
-	width  int
-	height int
+	cells    [][]Cell
+	rowCount int
+	colCount int
 }
 
-func (grid *Grid) Configure(rows int, cols int, width int, height int) {
+func (grid *Grid) Configure(rowCount int, colCount int) {
 
 	// Set once
-	grid.cols = cols
-	grid.rows = rows
-	grid.width = width
-	grid.height = height
+	grid.colCount = colCount
+	grid.rowCount = rowCount
 
 	// Create a 2D Grid
-	grid.cells = make([][]Cell, rows)
+	grid.cells = make([][]Cell, rowCount)
 	for i := range grid.cells {
-		grid.cells[i] = make([]Cell, cols)
+		grid.cells[i] = make([]Cell, colCount)
 	}
 
 }
-
-
 
 func (grid *Grid) GetCells() [][]Cell {
 	return grid.cells
@@ -50,42 +44,55 @@ func (grid *Grid) LoadGrid(str string) {
 
 	rows := strings.Split(str, "\n")
 
+
 out:
 	for r, row := range rows {
 
 		for c, char := range row {
 
 			// if the row is to big then it will be truncated
-			if c >= grid.cols {
+			if c >= grid.colCount {
 				continue
 			}
 
 			// if at the bottom of the screen then we need to stop
-			if r >= grid.rows {
+			if r >= grid.rowCount {
 				break out
 			}
 			grid.cells[r][c].SetChar(char)
-	
 
 		}
 
 		// Clear out to the end of the line
-		for i := len(row); i < grid.cols; i++ {
-			grid.cells[r][i].SetChar(' ')
+		for cc := len(row); cc < grid.colCount; cc++ {
+			grid.cells[r][cc].SetChar(' ')
 		}
 
+	}
+
+	
+	// Clear out remaining lines
+	for rr := len(rows); rr < grid.rowCount; rr++ {
+		for cc := 0; cc < grid.colCount; cc++ {
+			grid.cells[rr][cc].SetChar(' ')
+			// fmt.Printf("DEBUG rr: %v  cc: %v\n",rr,cc)
+		}
 	}
 
 }
 
 func (grid *Grid) GetWidth() int {
-	return grid.width
+	return grid.colCount
 }
 func (grid *Grid) GetHeight() int {
-	return grid.height
+	return grid.rowCount
 }
 
-func (cell *Cell) SetChar(char rune){
+func (cell *Cell) SetIsDirty(dirty bool) {
+	cell.isDirty = dirty
+}
+
+func (cell *Cell) SetChar(char rune) {
 	cell.prevChar = cell.char
 	cell.char = char
 
@@ -104,7 +111,4 @@ func (cell *Cell) GetPrevChar() rune {
 }
 func (cell *Cell) IsDirty() bool {
 	return cell.isDirty
-}
-func (cell *Cell) SetIsDirty(dirty bool) {
-	cell.isDirty = dirty
 }

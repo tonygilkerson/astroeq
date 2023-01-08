@@ -106,7 +106,7 @@ func main() {
 	var screen Screen
 	screen.ch = make(chan Screen)
 	green := color.RGBA{0, 255, 0, 255}
-	screen.Configure(10, 20, 12, 20, display, freemono.Regular9pt7b, green)
+	screen.Configure(10, 20, display, freemono.Regular9pt7b, green)
 
 	// // DEBUG
 	// time.Sleep(time.Second * 5)
@@ -200,7 +200,7 @@ func runLight() {
 }
 
 // DEBUG
-func  printGrid(grid grid.Grid) {
+func printGrid(grid grid.Grid) {
 
 	for _, row := range grid.GetCells() {
 		// fmt.Printf("row: %v\n", r)
@@ -213,10 +213,10 @@ func  printGrid(grid grid.Grid) {
 	}
 }
 
-func (screen *Screen) Configure(rows int, cols int, width int, height int, displayDevice st7789.Device, font tinyfont.Font, fontColor color.RGBA) {
+func (screen *Screen) Configure(rowsCount int, colCount int, displayDevice st7789.Device, font tinyfont.Font, fontColor color.RGBA) {
 	var grid grid.Grid
 	screen.grid = grid
-	screen.grid.Configure(rows, cols, 12, 20)
+	screen.grid.Configure(rowsCount, colCount)
 
 	screen.displayDevice = displayDevice
 	screen.font = font

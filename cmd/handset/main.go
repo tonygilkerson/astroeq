@@ -10,6 +10,7 @@ import (
 	"github.com/tonygilkerson/astroeq/pkg/msg"
 
 	"tinygo.org/x/drivers/ssd1351"
+	"tinygo.org/x/tinyfont/freemono"
 )
 
 /*
@@ -151,10 +152,9 @@ func main() {
 		ColumnOffset: 0,
 	})
 
-	// not sure if this is needed
-	display.Command(ssd1351.SET_REMAP_COLORDEPTH)
+	// DEVTODO the next three lins prob need move to hid conifg method
+	display.Command(ssd1351.SET_REMAP_COLORDEPTH) // not sure if this is needed
 	display.Data(0x62)
-
 	display.FillScreen(color.RGBA{0, 0, 0, 0})
 
 	//
@@ -185,7 +185,11 @@ func main() {
 	enterKey := machine.GP20
 
 	handset, _ := hid.NewHandset(
-		&display,
+		display,
+		freemono.Regular9pt7b,
+		color.RGBA{0, 0, 255, 255}, // RED
+		7,
+		11,
 		&mb,
 		zeroKey,
 		oneKey,
