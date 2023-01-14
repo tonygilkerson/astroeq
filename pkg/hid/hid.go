@@ -146,7 +146,7 @@ type Handset struct {
 
 // The Screen properties are used to determine what is written to the display
 type Screen struct {
-	grid          grid.Grid
+	grid.Grid
 	displayDevice ssd1351.Device
 	font          tinyfont.Font
 	fontColor     color.RGBA
@@ -190,11 +190,11 @@ func NewHandset(
 ) (Handset, error) {
 
 	var screen Screen
-	var grid grid.Grid
+	// var grid grid.Grid  DEVTODO del me soon
 
 	screen.displayDevice = displayDevice
-	screen.grid = grid
-	screen.grid.Configure(displayRows, displayCols)
+	// screen.grid = grid    DEVTODO del me soon
+	screen.ConfigureGrid(displayRows, displayCols)
 	screen.font = font
 	screen.fontColor = fontColor
 
@@ -737,29 +737,28 @@ func (hs *Handset) GetStatusLine() string {
 
 func (hs *Handset) RenderScreen() {
 
-	hs.Screen.grid.LoadGrid(hs.GetStatusLine() + "\n-----------\n" + hs.Screen.BodyText)
+	hs.Screen.LoadGrid(hs.GetStatusLine() + "\n-----------\n" + hs.Screen.BodyText)
 	hs.Screen.WriteLines()
 
 }
-
 
 func (screen *Screen) WriteLines() {
 
 	var x, y int16
 	black := color.RGBA{0, 0, 0, 255}
 
-	for r, row := range screen.grid.GetCells() {
+	for r, row := range screen.GetCells() {
 		for c, col := range row {
 			cell := col
 			// DEVTODO might need to add width and height back, also the x and y seem backward do I have the screen rotated
 			//         undo the hard code when you figure it out
 			x = int16(10*c) + 10
 			y = int16(15*r) + 15
-		
+
 			// x = int16(screen.grid.GetWidth()*c) + 5
 			// y = int16(screen.grid.GetHeight()*r) + 20
 			if cell.IsDirty() {
-				cells := screen.grid.GetCells()
+				cells := screen.GetCells()
 				tinyfont.WriteLine(&screen.displayDevice, &screen.font, x, y, string(cells[r][c].GetPrevChar()), black) // erase the previous character
 				tinyfont.WriteLine(&screen.displayDevice, &screen.font, x, y, string(cells[r][c].GetChar()), screen.fontColor)
 			}

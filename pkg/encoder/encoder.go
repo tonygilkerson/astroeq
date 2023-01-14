@@ -28,18 +28,23 @@ type RAEncoder struct {
 	rotationCount          int16
 }
 
-func NewRA(spi machine.SPI, cs machine.Pin, resolution int8) RAEncoder {
+// DEVTODO delete me soon
+// func NewRA(spi machine.SPI, cs machine.Pin, resolution int8) RAEncoder {
 
-	return RAEncoder{
-		spi:        spi,
-		cs:         cs,
-		resolution: resolution,
-	}
+// 	return RAEncoder{
+// 		spi:        spi,
+// 		cs:         cs,
+// 		resolution: resolution,
+// 	}
 
-}
+// }
 
 // Configure RA encoder
-func (raEncoder *RAEncoder) Configure() {
+func (raEncoder *RAEncoder) ConfigureEncoder(spi machine.SPI, cs machine.Pin, resolution int8) {
+
+	raEncoder.spi = spi
+	raEncoder.cs = cs
+	raEncoder.resolution = resolution
 
 	//
 	// Channel select for encoder on the SPI bus

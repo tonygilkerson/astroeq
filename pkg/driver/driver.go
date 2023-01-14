@@ -98,7 +98,7 @@ type RADriver struct {
 	gearRatio int32
 
 	// RA Encoder
-	encoder encoder.RAEncoder
+	encoder.RAEncoder
 
 	// RA Encoder
 	position uint32
@@ -141,9 +141,7 @@ func NewRADriver(
 		return RADriver{}, errors.New("gearRatio must be greater than 0, use 1 if not using a gearbox, typical values between 1 and 75")
 	}
 
-	encoder := encoder.NewRA(encoderSPI, encoderCS, encoder.RES14)
-
-	return RADriver{
+	raDriver := RADriver{
 		stepPin:             stepPin,
 		pwm:                 pwm,
 		directionPin:        directionPin,
@@ -157,8 +155,10 @@ func NewRADriver(
 		enableMotorPin:      enableMotorPin,
 		wormRatio:           wormRatio,
 		gearRatio:           gearRatio,
-		encoder:             encoder,
-	}, nil
+	}
+	raDriver.ConfigureEncoder(encoderSPI, encoderCS, encoder.RES14)
+
+	return raDriver, nil
 }
 
 func (ra *RADriver) Configure() {
@@ -192,16 +192,11 @@ func (ra *RADriver) Configure() {
 	ra.SetTracking(RA_TRACKING_OFF)
 
 	// RA Encoder
-	ra.encoder.Configure()
-	ra.encoder.ZeroRA()
+	ra.ZeroRA()
 
 	// Start go routine to monitor position
 	go ra.monitorPositionRoutine()
 
-}
-
-func (ra *RADriver) ZeroRA() {
-	ra.encoder.ZeroRA()
 }
 
 func (ra *RADriver) setMicroStepSetting(ms MicroStep) {
@@ -277,7 +272,7 @@ func (ra *RADriver) RunAtHz(hz float64) {
 func (ra *RADriver) monitorPositionRoutine() {
 
 	for {
-		position, err := ra.encoder.GetPositionRA()
+		position, err := ra.GetPositionRA()
 		if err == nil {
 			ra.position = position
 		} else {

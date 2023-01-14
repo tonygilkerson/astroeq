@@ -1,5 +1,6 @@
 package main
 
+// DEVTODO replace console with console-v2, we just need one
 import (
 	"fmt"
 	"machine"
@@ -18,7 +19,7 @@ import (
 )
 
 type Screen struct {
-	grid          grid.Grid
+	grid.Grid
 	displayDevice st7789.Device
 	font          tinyfont.Font
 	fontColor     color.RGBA
@@ -214,9 +215,9 @@ func printGrid(grid grid.Grid) {
 }
 
 func (screen *Screen) Configure(rowsCount int, colCount int, displayDevice st7789.Device, font tinyfont.Font, fontColor color.RGBA) {
-	var grid grid.Grid
-	screen.grid = grid
-	screen.grid.Configure(rowsCount, colCount)
+	// var grid grid.Grid    DEVTODO del me soon
+	// screen.grid = grid
+	screen.ConfigureGrid(rowsCount, colCount)
 
 	screen.displayDevice = displayDevice
 	screen.font = font
@@ -229,13 +230,13 @@ func (screen *Screen) WriteLines() {
 	var x, y int16
 	black := color.RGBA{0, 0, 0, 255}
 
-	for r, row := range screen.grid.GetCells() {
+	for r, row := range screen.GetCells() {
 		for c, col := range row {
 			cell := col
-			x = int16(screen.grid.GetWidth()*c) + 5
-			y = int16(screen.grid.GetHeight()*r) + 20
+			x = int16(screen.GetWidth()*c) + 5
+			y = int16(screen.GetHeight()*r) + 20
 			if cell.IsDirty() {
-				cells := screen.grid.GetCells()
+				cells := screen.GetCells()
 				tinyfont.WriteLine(&screen.displayDevice, &screen.font, x, y, string(cells[r][c].GetPrevChar()), black) // erase the previous character
 				tinyfont.WriteLine(&screen.displayDevice, &screen.font, x, y, string(cells[r][c].GetChar()), screen.fontColor)
 			}
@@ -323,7 +324,7 @@ func (screen *Screen) consoleRoutine() {
 		if screen.FilterText == "*ANY" || strings.Contains(screen.BodyText, screen.FilterText) {
 			//DEVTODO hide grid behind a screen method
 			//DEVTODO break status out to it own thing
-			screen.grid.LoadGrid(screen.StatusText + "\n" + screen.BodyText)
+			screen.LoadGrid(screen.StatusText + "\n" + screen.BodyText)
 			screen.WriteLines()
 			fmt.Printf("DEBUG-1 - %v \t %v\n", screen.StatusText, screen.BodyText)
 

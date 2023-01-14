@@ -9,7 +9,7 @@ import (
 func main() {
 
 	var grid grid.Grid
-	grid.Configure(3, 4)
+	grid.ConfigureGrid(3, 4)
 
 	grid.LoadGrid("AAAA\nBBBB\nCCCC")
 	printGrid(grid)

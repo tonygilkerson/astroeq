@@ -22,7 +22,7 @@ type Grid struct {
 	colCount int
 }
 
-func (grid *Grid) Configure(rowCount int, colCount int) {
+func (grid *Grid) ConfigureGrid(rowCount int, colCount int) {
 
 	// Set once
 	grid.colCount = colCount
@@ -43,7 +43,6 @@ func (grid *Grid) GetCells() [][]Cell {
 func (grid *Grid) LoadGrid(str string) {
 
 	rows := strings.Split(str, "\n")
-
 
 out:
 	for r, row := range rows {
@@ -70,7 +69,6 @@ out:
 
 	}
 
-	
 	// Clear out remaining lines
 	for rr := len(rows); rr < grid.rowCount; rr++ {
 		for cc := 0; cc < grid.colCount; cc++ {
