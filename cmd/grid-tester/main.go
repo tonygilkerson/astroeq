@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	// "image/color"
-	"github.com/tonygilkerson/astroeq/pkg/grid"
+	"github.com/tonygilkerson/astroeq/pkg/hid"
 )
 
 func main() {
 
-	var grid grid.Grid
+	var grid hid.Grid
 	grid.ConfigureGrid(3, 4)
 
 	grid.LoadGrid("AAAA\nBBBB\nCCCC")
@@ -20,7 +20,7 @@ func main() {
 
 }
 
-func printGrid(grid grid.Grid) {
+func printGrid(grid hid.Grid) {
 
 	for _, row := range grid.GetCells() {
 		// fmt.Printf("row: %v\n", r)

@@ -14,12 +14,12 @@ import (
 	"tinygo.org/x/tinyfont"
 	"tinygo.org/x/tinyfont/freemono"
 
-	"github.com/tonygilkerson/astroeq/pkg/grid"
+	"github.com/tonygilkerson/astroeq/pkg/hid"
 	"github.com/tonygilkerson/astroeq/pkg/msg"
 )
 
 type Screen struct {
-	grid.Grid
+	hid.Grid
 	displayDevice st7789.Device
 	font          tinyfont.Font
 	fontColor     color.RGBA
@@ -201,7 +201,7 @@ func runLight() {
 }
 
 // DEBUG
-func printGrid(grid grid.Grid) {
+func printGrid(grid hid.Grid) {
 
 	for _, row := range grid.GetCells() {
 		// fmt.Printf("row: %v\n", r)
@@ -215,17 +215,17 @@ func printGrid(grid grid.Grid) {
 }
 
 func (screen *Screen) Configure(rowsCount int, colCount int, displayDevice st7789.Device, font tinyfont.Font, fontColor color.RGBA) {
-	// var grid grid.Grid    DEVTODO del me soon
-	// screen.grid = grid
-	screen.ConfigureGrid(rowsCount, colCount)
 
+	screen.ConfigureGrid(rowsCount, colCount)
 	screen.displayDevice = displayDevice
 	screen.font = font
 	screen.fontColor = fontColor
 
 }
 
-func (screen *Screen) WriteLines() {
+func (screen *Screen) WriteLines(text string) {
+
+	screen.LoadGrid(text)
 
 	var x, y int16
 	black := color.RGBA{0, 0, 0, 255}
@@ -322,10 +322,8 @@ func (screen *Screen) consoleRoutine() {
 		// If no filter or filter text is found
 		//
 		if screen.FilterText == "*ANY" || strings.Contains(screen.BodyText, screen.FilterText) {
-			//DEVTODO hide grid behind a screen method
-			//DEVTODO break status out to it own thing
-			screen.LoadGrid(screen.StatusText + "\n" + screen.BodyText)
-			screen.WriteLines()
+
+			screen.WriteLines(screen.StatusText + "\n" + screen.BodyText)
 			fmt.Printf("DEBUG-1 - %v \t %v\n", screen.StatusText, screen.BodyText)
 
 		}

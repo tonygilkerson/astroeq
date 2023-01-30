@@ -11,73 +11,14 @@ import (
 	"tinygo.org/x/tinyfont"
 
 	"github.com/tonygilkerson/astroeq/pkg/driver"
-	"github.com/tonygilkerson/astroeq/pkg/grid"
 	"github.com/tonygilkerson/astroeq/pkg/msg"
-)
-
-const VERSION string = "v0-alpha4"
-const MMDDYY = "010206"
-const LOCATION_LATITUDE_HOME = "+39.8491"
-const LOCATION_LONGITUDE_HOME = "-83.9768"
-const LOCATION_ELEVATION = "+270"
-
-// The handset is controlled by a state machine. State is used to control what is
-// displayed on the screen and what keys are valid input
-type State uint8
-
-const (
-	ZERO State = iota
-	FIRST
-	SHOW_VERSION
-	SET_DATE
-	SET_TIME
-	SET_LATITUDE
-	SET_LONGITUDE
-	SET_ELEVATION
-	UTILITY_MENU
-	SET_RA_TRACKING
-	SET_RA_DIRECTION
-	OBJECTS_MENU
-	LAST
-	SET_DATE_Error
-	SET_TIME_MSG_ERROR
-)
-
-// Each button on the handset corresponds to one of the following Keys
-type Key uint8
-
-const (
-	KEY_UNDEFINED Key = iota
-	KEY_ZERO
-	KEY_ONE
-	KEY_TWO
-	KEY_THREE
-	KEY_FOUR
-	KEY_FIVE
-	KEY_SIX
-	KEY_SEVEN
-	KEY_EIGHT
-	KEY_NINE
-
-	KEY_SCROLL_DN
-	KEY_SCROLL_UP
-
-	KEY_RIGHT
-	KEY_LEFT
-	KEY_UP
-	KEY_DOWN
-
-	KEY_ESC
-	KEY_SETUP
-	KEY_ENTER
-	KEY_REFRESH
 )
 
 // The Handset properties are maintained by the user via the handset.
 // The user can perform basic CRUD operations on the Handset properties as well as
 // use them in commands sent over the message bus.
 type Handset struct {
-	Screen       *Screen
+	Screen
 	msgBroker    *msg.MsgBroker
 	isSetup      bool
 	state        State
@@ -145,17 +86,17 @@ type Handset struct {
 }
 
 // The Screen properties are used to determine what is written to the display
-type Screen struct {
-	grid.Grid
-	displayDevice ssd1351.Device
-	font          tinyfont.Font
-	fontColor     color.RGBA
-	BodyText      string
-	// RA Data
-	Tracking  driver.RaValue
-	Direction driver.RaValue
-	Position  uint32
-}
+// type Screen struct {
+// 	grid.Grid
+// 	displayDevice ssd1351.Device
+// 	font          tinyfont.Font
+// 	fontColor     color.RGBA
+// 	BodyText      string
+// 	// RA Data
+// 	Tracking  driver.RaValue
+// 	Direction driver.RaValue
+// 	Position  uint32
+// }
 
 // Returns a new Handset
 func NewHandset(
@@ -187,19 +128,16 @@ func NewHandset(
 	escKey machine.Pin,
 	setupKey machine.Pin,
 	enterKey machine.Pin,
-) (Handset, error) {
+) *Handset {
 
 	var screen Screen
-	// var grid grid.Grid  DEVTODO del me soon
+	screen.ConfigureGrid(displayRows, displayCols)
 
 	screen.displayDevice = displayDevice
-	// screen.grid = grid    DEVTODO del me soon
-	screen.ConfigureGrid(displayRows, displayCols)
 	screen.font = font
 	screen.fontColor = fontColor
 
-	return Handset{
-		Screen:               &screen,
+	return &Handset{
 		msgBroker:            msgBroker,
 		isSetup:              false,
 		state:                FIRST,
@@ -232,13 +170,13 @@ func NewHandset(
 		locationLongitudeStr: LOCATION_LONGITUDE_HOME,
 		locationElevationStr: LOCATION_ELEVATION,
 		locationElevation:    0,
-	}, nil
+	}
 }
 
 // Configure - will configure the HID pins and assign each to a key
 // starts a go routine to listen for key strokes and publishes each to the key chan
 // the key channel is returned for key stroke subscribers
-func (hs *Handset) Configure() chan Key {
+func (hs *Handset) Configure() {
 
 	//
 	// Configure Key Pins
@@ -291,9 +229,17 @@ func (hs *Handset) Configure() chan Key {
 	//
 	go hs.publishKeysRoutine()
 
-	return hs.keyStrokes
-
 }
+
+func (hs *Handset) GetKeyStrokesCh() chan Key {
+
+	return hs.keyStrokes
+}
+
+// DEVTODO del me soon
+// func (hs *Handset) GetScreen() *Screen {
+// 	return hs.Screen
+// }
 
 // PublishKeys will capture the keys pressed and publish them to the keyStrokes channel
 func (hs *Handset) publishKeysRoutine() {
@@ -648,7 +594,7 @@ func (hs *Handset) StateMachine(key Key) string {
 	//
 	switch hs.state {
 	case ZERO:
-		hs.dspOut = fmt.Sprintf("RA: %v", hs.Screen.Position)
+		hs.dspOut = fmt.Sprintf("RA: %v", hs.GetPosition())
 
 	case FIRST:
 
@@ -665,10 +611,10 @@ func (hs *Handset) StateMachine(key Key) string {
 		hs.dspOut = "VERSION\n" + VERSION
 
 	case SET_RA_TRACKING:
-		hs.dspOut = "RA Tracking\n1 - On\n2 - Off\n" + string(hs.Screen.Direction)
+		hs.dspOut = "RA Tracking\n1 - On\n2 - Off\n" + string(hs.GetDirection())
 
 	case SET_RA_DIRECTION:
-		hs.dspOut = "RA Dir\n1 - North\n2 - South\n" + string(hs.Screen.Direction)
+		hs.dspOut = "RA Dir\n1 - North\n2 - South\n" + string(hs.GetDirection())
 
 	case SET_DATE:
 		hs.dspOut = "Set Date\nYYYY-MM-DD\n-----------\n" + hs.currentDateStr
@@ -716,7 +662,7 @@ func (hs *Handset) GetStatusLine() string {
 	// Compute the status bar text
 	//
 
-	if hs.Screen.Tracking == driver.RA_TRACKING_ON {
+	if hs.Screen.GetTracking() == driver.RA_TRACKING_ON {
 		// On - tracking
 		status[0] = 'T'
 	} else {
@@ -724,7 +670,7 @@ func (hs *Handset) GetStatusLine() string {
 		status[0] = 'X'
 	}
 
-	if hs.Screen.Direction == driver.RA_DIRECTION_NORTH {
+	if hs.Screen.GetDirection() == driver.RA_DIRECTION_NORTH {
 		// Direction = North
 		status[1] = 'N'
 	} else {
@@ -735,35 +681,11 @@ func (hs *Handset) GetStatusLine() string {
 	return string(status)
 }
 
-func (hs *Handset) RenderScreen() {
+func (hs *Handset) Write(text string) {
 
-	hs.Screen.LoadGrid(hs.GetStatusLine() + "\n-----------\n" + hs.Screen.BodyText)
-	hs.Screen.WriteLines()
+	hs.Screen.SetBodyText(text)
+	hs.Screen.WriteLines(hs.GetStatusLine() + "\n-----------\n" + hs.Screen.GetBodyText())
 
-}
-
-func (screen *Screen) WriteLines() {
-
-	var x, y int16
-	black := color.RGBA{0, 0, 0, 255}
-
-	for r, row := range screen.GetCells() {
-		for c, col := range row {
-			cell := col
-			// DEVTODO might need to add width and height back, also the x and y seem backward do I have the screen rotated
-			//         undo the hard code when you figure it out
-			x = int16(10*c) + 10
-			y = int16(15*r) + 15
-
-			// x = int16(screen.grid.GetWidth()*c) + 5
-			// y = int16(screen.grid.GetHeight()*r) + 20
-			if cell.IsDirty() {
-				cells := screen.GetCells()
-				tinyfont.WriteLine(&screen.displayDevice, &screen.font, x, y, string(cells[r][c].GetPrevChar()), black) // erase the previous character
-				tinyfont.WriteLine(&screen.displayDevice, &screen.font, x, y, string(cells[r][c].GetChar()), screen.fontColor)
-			}
-		}
-	}
 }
 
 // Util functions

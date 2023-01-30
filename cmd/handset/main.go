@@ -14,6 +14,7 @@ import (
 )
 
 /*
+DEVTODO document this in a "wire.md" likd i did in the ra-driver
 
 
 	Pico									OLED 																						ssd1351 						keypad						UART
@@ -184,7 +185,7 @@ func main() {
 	setupKey := machine.GP26
 	enterKey := machine.GP20
 
-	handset, _ := hid.NewHandset(
+	handset := hid.NewHandset(
 		display,
 		freemono.Regular9pt7b,
 		color.RGBA{0, 0, 255, 255}, // RED
@@ -210,19 +211,19 @@ func main() {
 		escKey,
 		setupKey,
 		enterKey)
-
-	keyStrokesCh := handset.Configure()
+	handset.Configure()
+	keyStrokesCh := handset.GetKeyStrokesCh()
 
 	//
 	// Start the message consumers
 	//
 	go fooConsumerRoutine(fooCh, &mb)
-	go raDriverConsumerRoutine(&handset, raDriverCh, &mb)
+	go raDriverConsumerRoutine(handset, raDriverCh, &mb)
 
 	//
 	// Start the local key consumer
 	//
-	go handsetStateMachineRoutine(&handset, keyStrokesCh, &mb)
+	go handsetStateMachineRoutine(handset, keyStrokesCh, &mb)
 
 	//
 	// Keep main live
@@ -255,14 +256,10 @@ func handsetStateMachineRoutine(hs *hid.Handset, keyStrokesCh chan hid.Key, mb *
 	// Menu interaction
 	var noKey hid.Key
 
-	hs.Screen.BodyText = hs.StateMachine(noKey)
-	hs.RenderScreen()
+	hs.Write(hs.StateMachine(noKey))
 
 	for k := range keyStrokesCh {
-
-		hs.Screen.BodyText = hs.StateMachine(k)
-		hs.RenderScreen()
-
+		hs.Write(hs.StateMachine(k))
 	}
 
 }
@@ -279,12 +276,15 @@ func raDriverConsumerRoutine(hs *hid.Handset, ch chan msg.RADriverMsg, mb *msg.M
 	for raMsg := range ch {
 		fmt.Printf("[handset.raDriverConsumerRoutine] - msg: [%v]\n", raMsg)
 
-		hs.Screen.Tracking = raMsg.Tracking
-		hs.Screen.Direction = raMsg.Direction
-		hs.Screen.Position = raMsg.Position
+		// DEVTODO - I made an interface for the handset to be explicit about what the consumer expects but
+		//           screen seems to be "leaked" I am setting fields on screen that are not part of the interface
+		//           this seems to make the interface useless.  I am not sure I guess I need to completely hide
+		//           screen and only access it via methods on hid
+		hs.Screen.SetTracking(raMsg.Tracking)
+		hs.Screen.SetDirection(raMsg.Direction)
+		hs.Screen.SetPosition(raMsg.Position)
 
-		hs.Screen.BodyText = hs.StateMachine(hid.KEY_REFRESH)
-		hs.RenderScreen()
+		hs.Write(hs.StateMachine(hid.KEY_REFRESH))
 
 	}
 }

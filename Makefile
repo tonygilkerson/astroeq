@@ -43,3 +43,8 @@ build: clean fmt
 	tinygo build -target=pico -o ./cmd/ra-driver/ra-driver.elf ./cmd/ra-driver/main.go	
 	tinygo build -target=pico -o ./cmd/handset/handset.elf     ./cmd/handset/main.go
 .PHONY:build
+
+#
+# DEVTODO - add tests
+# something like this:
+# tinygo test -target=pico -run ^TestCell_SetChar$ github.com/tonygilkerson/astroeq/pkg/hid

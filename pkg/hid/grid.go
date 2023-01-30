@@ -1,21 +1,10 @@
-package grid
+package hid
 
 import (
-	"image/color"
 	"strings"
 )
 
-var COLOR_BLACK color.Color = color.RGBA{0, 0, 0, 255}
-var COLOR_RED color.Color = color.RGBA{255, 0, 0, 255}
-var COLOR_GREEN color.Color = color.RGBA{0, 255, 0, 255}
-var COLOR_BLUE color.Color = color.RGBA{0, 0, 255, 255}
-
-type Cell struct {
-	char     rune
-	prevChar rune
-	isDirty  bool
-}
-
+// grid
 type Grid struct {
 	cells    [][]Cell
 	rowCount int
@@ -84,29 +73,4 @@ func (grid *Grid) GetWidth() int {
 }
 func (grid *Grid) GetHeight() int {
 	return grid.rowCount
-}
-
-func (cell *Cell) SetIsDirty(dirty bool) {
-	cell.isDirty = dirty
-}
-
-func (cell *Cell) SetChar(char rune) {
-	cell.prevChar = cell.char
-	cell.char = char
-
-	if cell.GetChar() != cell.GetPrevChar() {
-		cell.SetIsDirty(true)
-	} else {
-		cell.SetIsDirty(false)
-	}
-}
-
-func (cell *Cell) GetChar() rune {
-	return cell.char
-}
-func (cell *Cell) GetPrevChar() rune {
-	return cell.prevChar
-}
-func (cell *Cell) IsDirty() bool {
-	return cell.isDirty
 }
